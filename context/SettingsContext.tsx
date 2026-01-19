@@ -35,7 +35,6 @@ interface SettingsContextType {
   getAllUsers: () => Promise<UserProfile[]>;
   updateUserRole: (id: string, role: 'admin' | 'user') => Promise<void>;
   isAdmin: boolean;
-  // Fix: Updated return types to include 'data' property as expected by components/AdminLogin.tsx
   login: (email: string, pass: string) => Promise<{ data: any; error: any }>;
   signup: (email: string, pass: string) => Promise<{ data: any; error: any; message?: string }>;
   logout: () => Promise<void>;
@@ -73,17 +72,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchUserProfile = async (id: string, email: string) => {
     try {
+      // محاولة جلب البروفايل، إذا لم يكن موجوداً، لا ننتظره للأبد
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
       if (data) {
         setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
       } else {
-        const role = email.toLowerCase() === 'aaatay3@gmail.com' ? 'admin' : 'user';
-        const { data: newProfile } = await supabase.from('profiles').upsert({ id, email, role }).select().single();
-        if (newProfile) {
-          setUser({ id, email, role: newProfile.role as 'admin' | 'user', display_name: newProfile.display_name, avatar_url: newProfile.avatar_url });
-        } else {
-          setUser({ id, email, role });
-        }
+        // إذا لم يوجد بروفايل (ربما تأخر التريجر)، نضعه كمستخدم عادي مبدئياً
+        setUser({ id, email, role: email.toLowerCase() === 'aaatay3@gmail.com' ? 'admin' : 'user' });
       }
     } catch (e) {
       console.error("Profile fetch error:", e);
@@ -94,24 +89,32 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const init = async () => {
       try {
+        // 1. جلب الجلسة أولاً
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
+        if (session?.user) {
+          await fetchUserProfile(session.user.id, session.user.email!);
+        }
         
-        const [s, t, n] = await Promise.all([
-          apiService.getSettings(),
-          apiService.getTickets(),
-          apiService.getNews()
-        ]);
+        // 2. جلب بقية البيانات بالتوازي
+        // نستخدم catch لكل طلب لمنع تعليق كل العملية إذا فشل جدول واحد
+        const fetchSettings = apiService.getSettings().catch(err => { console.warn("Settings fetch failed:", err); return null; });
+        const fetchTickets = apiService.getTickets().catch(err => { console.warn("Tickets fetch failed:", err); return []; });
+        const fetchNews = apiService.getNews().catch(err => { console.warn("News fetch failed:", err); return []; });
+
+        const [s, t, n] = await Promise.all([fetchSettings, fetchTickets, fetchNews]);
         
         if (s) setSettings({ ...DEFAULT_SETTINGS, ...s });
-        setTickets(t || []);
-        setNews(n || []);
+        if (t) setTickets(t);
+        if (n) setNews(n);
+
       } catch (e) {
-        console.error("Initialization error:", e);
+        console.error("General Initialization error:", e);
       } finally {
+        // نضمن إغلاق شاشة التحميل مهما حدث
         setIsLoading(false);
       }
     };
+
     init();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -119,6 +122,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         await fetchUserProfile(session.user.id, session.user.email!);
       } else {
         setUser(null);
+        if (currentPage === 'admin') setCurrentPage('site');
       }
     });
 

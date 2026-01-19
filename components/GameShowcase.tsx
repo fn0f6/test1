@@ -61,7 +61,11 @@ const GameShowcase: React.FC = () => {
                       alt={feat.title} 
                       loading="lazy"
                       decoding="async"
-                      onError={(e) => { (e.target as HTMLImageElement).src = `https://via.placeholder.com/800x1600/111111/ffd700?text=${feat.title}`; }}
+                      onError={(e) => { 
+                        // تشفير النص لمنع أخطاء الروابط
+                        const encodedText = encodeURIComponent(feat.title);
+                        (e.target as HTMLImageElement).src = `https://placehold.co/800x1600/111111/ffd700?text=${encodedText}`; 
+                      }}
                       className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-105 will-change-transform" 
                    />
                    <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-transparent pointer-events-none"></div>

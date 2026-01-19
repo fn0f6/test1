@@ -1,16 +1,23 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const AuthPage: React.FC = () => {
-  const { login, signup, navigateTo } = useSettings();
+  const { login, signup, navigateTo, user } = useSettings();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // إذا كان المستخدم مسجلاً بالفعل، قم بتوجيهه فوراً إلى الموقع
+  useEffect(() => {
+    if (user) {
+      navigateTo(user.role === 'admin' ? 'admin' : 'site');
+    }
+  }, [user, navigateTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,14 +27,25 @@ const AuthPage: React.FC = () => {
     
     try {
       if (isLoginMode) {
-        const result = await login(email, password);
-        if (result.error) setError(result.error.message || "فشل تسجيل الدخول");
+        const { data, error: loginErr } = await login(email, password);
+        if (loginErr) {
+          setError(loginErr.message || "فشل تسجيل الدخول");
+        } else if (data?.user) {
+          // نجاح الدخول - سيقوم useEffect بالأعلى بالتوجيه
+          setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التحويل...");
+        }
       } else {
-        const result = await signup(email, password);
-        if (result.error) {
-          setError(result.error.message || "فشل إنشاء الحساب");
-        } else if (result.message) {
-          setSuccessMsg(result.message);
+        const { data, error: signupErr } = await signup(email, password);
+        if (signupErr) {
+          setError(signupErr.message || "فشل إنشاء الحساب");
+        } else {
+          // في حال كان الـ Session موجوداً (تم الدخول تلقائياً)
+          if (data?.session) {
+            setSuccessMsg("تم إنشاء الحساب والدخول بنجاح!");
+          } else {
+            setSuccessMsg("تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتأكيده قبل تسجيل الدخول.");
+            // إذا كان Supabase مضبوطاً على الدخول المباشر بدون تأكيد، سيعمل useEffect
+          }
         }
       }
     } catch (err: any) {

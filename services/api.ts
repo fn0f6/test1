@@ -37,7 +37,7 @@ export const apiService = {
       ios_url: settings.ios_url,
       is_maintenance_mode: settings.isMaintenanceMode,
       maintenance_message: settings.maintenanceMessage,
-      showcase_images: settings.showcaseImages,
+      showcase_images: settings.showcase_images || settings.showcaseImages,
       translations: settings.translations,
       social_links: settings.socialLinks,
       updated_at: new Date().toISOString()
@@ -121,51 +121,53 @@ export const apiService = {
   },
 
   uploadImage: async (file: File, bucketName: string) => {
+    console.log(`🚀 Starting upload to bucket: ${bucketName}...`);
     try {
-      // 1. التحقق من الجلسة قبل الرفع لضمان وجود مستخدم
+      // 1. التحقق من الجلسة
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error("انتهت الجلسة، يرجى إعادة تسجيل الدخول.");
       }
 
-      // 2. تحويل الملف إلى ArrayBuffer (أكثر استقراراً في الرفع المتعدد)
-      const arrayBuffer = await file.arrayBuffer();
+      // 2. تجهيز اسم الملف
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
-      
-      // 3. إنشاء اسم فريد للملف لتجنب التكرار
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // 4. تنفيذ عملية الرفع
+      // 3. محاولة الرفع باستخدام File مباشرة (أكثر استقراراً)
       const { data, error: uploadError } = await supabase.storage
         .from(bucketName)
-        .upload(filePath, arrayBuffer, {
+        .upload(filePath, file, {
           contentType: file.type,
-          upsert: true,
-          cacheControl: '3600'
+          upsert: true
         });
 
       if (uploadError) {
-        // فحص نوع الخطأ وإرجاع رسالة عربية مفهومة
+        console.error("❌ Supabase Upload Error:", uploadError);
+        
+        // رسائل خطأ مفصلة
         if (uploadError.message.includes('bucket not found') || (uploadError as any).status === 404) {
-          throw new Error(`خطأ: المجلد "${bucketName}" غير موجود. يرجى إنشاؤه في Supabase Storage.`);
+          throw new Error(`المجلد "${bucketName}" غير موجود. يرجى إنشاؤه في Supabase Storage وجعله Public.`);
         }
         if (uploadError.message.includes('row-level security') || (uploadError as any).status === 403) {
-          throw new Error("خطأ: ليس لديك صلاحية للرفع. تأكد أن حسابك 'admin' والمجلد 'Public'.");
+          throw new Error("ليس لديك صلاحية للرفع. تأكد أن المجلد 'Public' وأن حسابك 'admin'.");
         }
-        throw uploadError;
+        throw new Error(`خطأ في الرفع: ${uploadError.message}`);
       }
 
-      // 5. جلب الرابط العام للصور
+      // 4. جلب الرابط العام
       const { data: { publicUrl } } = supabase.storage
         .from(bucketName)
         .getPublicUrl(filePath);
 
-      if (!publicUrl) throw new Error("فشل توليد رابط الصورة العام.");
-
+      console.log(`✅ Upload successful! URL: ${publicUrl}`);
       return publicUrl;
     } catch (e: any) {
-      console.error("Storage Error Details:", e);
+      console.error("🚨 Final Upload Crash:", e);
+      // إذا كان الخطأ AbortError، فهذا يعني أن المتصفح قطع الاتصال
+      if (e.name === 'AbortError') {
+        throw new Error("انقطع الاتصال أثناء الرفع. يرجى المحاولة مرة أخرى أو استخدام متصفح مختلف.");
+      }
       throw e;
     }
   }

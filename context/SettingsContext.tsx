@@ -72,46 +72,50 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchUserProfile = async (id: string, email: string) => {
     try {
-      // محاولة جلب البروفايل، إذا لم يكن موجوداً، لا ننتظره للأبد
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+      const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
       if (data) {
         setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
       } else {
-        // إذا لم يوجد بروفايل (ربما تأخر التريجر)، نضعه كمستخدم عادي مبدئياً
         setUser({ id, email, role: email.toLowerCase() === 'aaatay3@gmail.com' ? 'admin' : 'user' });
       }
     } catch (e) {
-      console.error("Profile fetch error:", e);
       setUser({ id, email, role: 'user' });
     }
   };
 
   useEffect(() => {
+    // مؤقت أمان: إذا استغرق التحميل أكثر من 4 ثوانٍ، افتح الموقع مهما حدث
+    const safetyTimer = setTimeout(() => {
+      if (isLoading) {
+        console.warn("⚠️ Loading took too long, forcing app start.");
+        setIsLoading(false);
+      }
+    }, 4000);
+
     const init = async () => {
+      console.log("⚓ Initializing Fleet Data...");
       try {
-        // 1. جلب الجلسة أولاً
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await fetchUserProfile(session.user.id, session.user.email!);
         }
         
-        // 2. جلب بقية البيانات بالتوازي
-        // نستخدم catch لكل طلب لمنع تعليق كل العملية إذا فشل جدول واحد
-        const fetchSettings = apiService.getSettings().catch(err => { console.warn("Settings fetch failed:", err); return null; });
-        const fetchTickets = apiService.getTickets().catch(err => { console.warn("Tickets fetch failed:", err); return []; });
-        const fetchNews = apiService.getNews().catch(err => { console.warn("News fetch failed:", err); return []; });
+        const fetchSettings = apiService.getSettings().catch(() => null);
+        const fetchTickets = apiService.getTickets().catch(() => []);
+        const fetchNews = apiService.getNews().catch(() => []);
 
         const [s, t, n] = await Promise.all([fetchSettings, fetchTickets, fetchNews]);
         
         if (s) setSettings({ ...DEFAULT_SETTINGS, ...s });
-        if (t) setTickets(t);
-        if (n) setNews(n);
-
+        setTickets(t || []);
+        setNews(n || []);
+        
+        console.log("✅ Fleet Data Loaded.");
       } catch (e) {
-        console.error("General Initialization error:", e);
+        console.error("❌ Initialization error:", e);
       } finally {
-        // نضمن إغلاق شاشة التحميل مهما حدث
         setIsLoading(false);
+        clearTimeout(safetyTimer);
       }
     };
 
@@ -122,11 +126,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         await fetchUserProfile(session.user.id, session.user.email!);
       } else {
         setUser(null);
-        if (currentPage === 'admin') setCurrentPage('site');
       }
     });
 
-    return () => authListener.subscription.unsubscribe();
+    return () => {
+      authListener.subscription.unsubscribe();
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   const login = async (email: string, pass: string) => {

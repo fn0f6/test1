@@ -1,198 +1,96 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { SupportTicket, NewsItem, UserProfile } from '../types';
-import { apiService } from '../services/api';
-import { supabase } from '../services/supabaseClient';
+import React, { useEffect, useRef } from 'react';
+import { useSettings } from '../context/SettingsContext';
+import { Shield, Map, MessageSquare, ShoppingCart, Trophy, Box } from 'lucide-react';
 
-export type Language = 'en' | 'ar';
-
-export interface SocialLinks {
-  showSocials: boolean; whatsapp: string; whatsappGroup: string; telegram: string; discord: string;
-  instagram: string; twitter: string; youtube: string; facebook: string; tiktok: string; snapchat: string;
-  activeLinks: {
-    whatsapp: boolean; whatsappGroup: boolean; telegram: boolean; discord: boolean; instagram: boolean;
-    twitter: boolean; youtube: boolean; facebook: boolean; tiktok: boolean; snapchat: boolean;
-  };
-}
-
-export interface SiteSettings {
-  logoUrl: string; heroBgUrl: string; siteBgColor: string; primaryColor: string; secondaryColor: string;
-  siteTitle: string; androidUrl: string; iosUrl: string; isMaintenanceMode: boolean; maintenanceMessage: string;
-  qrData: string; customQrUrl: string;
-  showcaseImages: { map: string; rank: string; tasks: string; chat: string; store: string; warehouse: string; };
-  translations: Record<Language, any>;
-  socialLinks: SocialLinks;
-}
-
-interface SettingsContextType {
-  settings: SiteSettings; updateSettings: (newSettings: Partial<SiteSettings>) => Promise<void>;
-  tickets: SupportTicket[]; news: NewsItem[];
-  addTicket: (ticket: any) => Promise<void>; addNews: (news: any) => Promise<void>;
-  deleteNews: (id: string) => Promise<void>; deleteTicket: (id: number) => Promise<void>;
-  isLoading: boolean; currentPage: 'site' | 'admin' | 'login'; navigateTo: (page: 'site' | 'admin' | 'login') => void;
-  user: UserProfile | null;
-  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
-  getAllUsers: () => Promise<UserProfile[]>;
-  updateUserRole: (id: string, role: 'admin' | 'user') => Promise<void>;
-  isAdmin: boolean;
-  login: (email: string, pass: string) => Promise<{ data: any; error: any }>;
-  signup: (email: string, pass: string) => Promise<{ data: any; error: any; message?: string }>;
-  logout: () => Promise<void>;
-  lang: Language; setLang: (lang: Language) => void; t: any;
-}
-
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
-
-const DEFAULT_TRANSLATIONS = { 
-  en: { navHome: 'Home', navNews: 'News', navShowcase: 'Features', navDownloads: 'Downloads', navSupport: 'Support', heroHeadline: 'Rule the Seas', heroSubheadline: 'Your adventure starts here.', heroBtnDownload: 'Get App', heroBtnLogs: 'Logs', newsTitle: 'News', newsSub: 'Latest', newsBtnRead: 'Read', showcaseTitle: 'Showcase', showcaseSub: 'Game', featMap: 'Map', featMapDesc: 'Explore', featRank: 'Rank', featRankDesc: 'Compete', featTasks: 'Tasks', featTasksDesc: 'Quests', featChat: 'Chat', featChatDesc: 'Connect', featStore: 'Store', featStoreDesc: 'Trade', featWarehouse: 'Safe', featWarehouseDesc: 'Secure', downloadTitle: 'Download', downloadSub: 'Now', downloadQuickDeploy: 'QR', downloadQuickDeploySub: 'Scan', supportTitle: 'Support', supportSub: 'Contact', supportBtnSend: 'Send', footerDesc: 'Asr Al Hamour', storeAppStore: 'App Store', storeGooglePlay: 'Google Play', storeBadge: 'Official' },
-  ar: { navHome: 'الرئيسية', navNews: 'الأخبار', navShowcase: 'المميزات', navDownloads: 'التحميل', navSupport: 'الدعم', heroHeadline: 'سيطر على البحار', heroSubheadline: 'مغامرتك تبدأ من هنا.', heroBtnDownload: 'تحميل', heroBtnLogs: 'السجلات', newsTitle: 'الأخبار', newsSub: 'الأحدث', newsBtnRead: 'اقرأ', showcaseTitle: 'العرض', showcaseSub: 'اللعبة', featMap: 'خريطة', featMapDesc: 'استكشف', featRank: 'ترتيب', featRankDesc: 'نافس', featTasks: 'مهام', featTasksDesc: 'يومية', featChat: 'دردشة', featChatDesc: 'تواصل', featStore: 'متجر', featStoreDesc: 'تاجر', featWarehouse: 'خزنة', featWarehouseDesc: 'أمّن', downloadTitle: 'تحميل', downloadSub: 'الآن', downloadQuickDeploy: 'QR', downloadQuickDeploySub: 'امسح', supportTitle: 'الدعم', supportSub: 'اتصل', supportBtnSend: 'إرسال', footerDesc: 'عصر الهامور', storeAppStore: 'App Store', storeGooglePlay: 'Google Play', storeBadge: 'رسمي' }
-};
-
-const DEFAULT_SETTINGS: SiteSettings = {
-  logoUrl: 'assets/asr_alhamour_logo_text.png', heroBgUrl: 'assets/island_skull_sunset.png', siteBgColor: '#050505',
-  primaryColor: '#10b981', secondaryColor: '#b45309', siteTitle: 'عصر الهامور',
-  androidUrl: '#', iosUrl: '#', isMaintenanceMode: false, maintenanceMessage: 'الأسطول في مهمة صيانة سريعة، سنعود قريباً!',
-  qrData: '', customQrUrl: '',
-  showcaseImages: { map: 'assets/old_map_texture.png', rank: 'assets/swords_crossed.png', tasks: 'assets/scroll_paper.png', chat: 'assets/chat_bubble.png', store: 'assets/fish_market_isometric.png', warehouse: 'assets/house_isometric.png' },
-  translations: DEFAULT_TRANSLATIONS,
-  socialLinks: {
-    showSocials: true, whatsapp: '', whatsappGroup: '', telegram: '', discord: '', instagram: '', twitter: '', youtube: '', facebook: '', tiktok: '', snapchat: '',
-    activeLinks: { whatsapp: true, whatsappGroup: true, telegram: true, discord: true, instagram: true, twitter: true, youtube: true, facebook: true, tiktok: true, snapchat: true }
-  }
-};
-
-export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentPage, setCurrentPage] = useState<'site' | 'admin' | 'login'>('site');
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [lang, setLang] = useState<Language>('ar');
-  const [isLoading, setIsLoading] = useState(true);
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [news, setNews] = useState<NewsItem[]>([]);
-
-  const fetchUserProfile = async (id: string, email: string) => {
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (data) {
-        setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
-      } else {
-        setUser({ id, email, role: email.toLowerCase() === 'aaatay3@gmail.com' ? 'admin' : 'user' });
-      }
-    } catch (e) {
-      setUser({ id, email, role: 'user' });
-    }
-  };
+const GameShowcase: React.FC = () => {
+  const { t, settings } = useSettings();
+  const showcaseRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // مؤقت أمان: إذا استغرق التحميل أكثر من 4 ثوانٍ، افتح الموقع مهما حدث
-    const safetyTimer = setTimeout(() => {
-      if (isLoading) {
-        console.warn("⚠️ Loading took too long, forcing app start.");
-        setIsLoading(false);
-      }
-    }, 4000);
-
-    const init = async () => {
-      console.log("⚓ Initializing Fleet Data...");
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await fetchUserProfile(session.user.id, session.user.email!);
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+          observer.unobserve(entry.target);
         }
-        
-        const fetchSettings = apiService.getSettings().catch(() => null);
-        const fetchTickets = apiService.getTickets().catch(() => []);
-        const fetchNews = apiService.getNews().catch(() => []);
+      });
+    }, { threshold: 0.1 });
 
-        const [s, t, n] = await Promise.all([fetchSettings, fetchTickets, fetchNews]);
-        
-        if (s) setSettings({ ...DEFAULT_SETTINGS, ...s });
-        setTickets(t || []);
-        setNews(n || []);
-        
-        console.log("✅ Fleet Data Loaded.");
-      } catch (e) {
-        console.error("❌ Initialization error:", e);
-      } finally {
-        setIsLoading(false);
-        clearTimeout(safetyTimer);
-      }
-    };
+    const revealElements = showcaseRef.current?.querySelectorAll('.reveal-on-scroll');
+    revealElements?.forEach(el => observer.observe(el));
 
-    init();
+    return () => observer.disconnect();
+  }, [settings]);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await fetchUserProfile(session.user.id, session.user.email!);
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-      clearTimeout(safetyTimer);
-    };
-  }, []);
-
-  const login = async (email: string, pass: string) => {
-    return await supabase.auth.signInWithPassword({ email, password: pass });
-  };
-
-  const signup = async (email: string, pass: string) => {
-    return await supabase.auth.signUp({ 
-      email, 
-      password: pass,
-      options: { data: { display_name: email.split('@')[0] } }
-    });
-  };
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setCurrentPage('site');
-  };
-
-  const navigateTo = (p: any) => {
-    if (p === 'admin' && (!user || user.role !== 'admin')) {
-       setCurrentPage(user ? 'site' : 'login');
-    } else {
-       setCurrentPage(p);
-    }
-    window.scrollTo(0, 0);
-  };
-
-  const currentTranslations = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
+  const features = [
+    { id: 'map', title: t.featMap, desc: t.featMapDesc, icon: <Map className="text-gold" size={24} />, img: settings.showcaseImages.map, delay: 0 },
+    { id: 'rank', title: t.featRank, desc: t.featRankDesc, icon: <Trophy className="text-gold" size={24} />, img: settings.showcaseImages.rank, delay: 50 },
+    { id: 'tasks', title: t.featTasks, desc: t.featTasksDesc, icon: <Shield className="text-gold" size={24} />, img: settings.showcaseImages.tasks, delay: 100 },
+    { id: 'chat', title: t.featChat, desc: t.featChatDesc, icon: <MessageSquare className="text-gold" size={24} />, img: settings.showcaseImages.chat, delay: 150 },
+    { id: 'store', title: t.featStore, desc: t.featStoreDesc, icon: <ShoppingCart className="text-gold" size={24} />, img: settings.showcaseImages.store, delay: 200 },
+    { id: 'warehouse', title: t.featWarehouse, desc: t.featWarehouseDesc, icon: <Box className="text-gold" size={24} />, img: settings.showcaseImages.warehouse, delay: 250 }
+  ];
 
   return (
-    <SettingsContext.Provider value={{ 
-      settings, tickets, news, isLoading, currentPage, navigateTo,
-      user, isAdmin: user?.role === 'admin', lang, setLang, t: currentTranslations,
-      login, signup, logout,
-      updateSettings: async (ns) => { 
-        const updated = { ...settings, ...ns }; 
-        setSettings(updated); 
-        await apiService.updateSettings(updated); 
-      },
-      updateUserProfile: async (u) => { 
-        if(!user) return; 
-        const d = await apiService.updateProfile(user.id, u); 
-        setUser(prev => prev ? { ...prev, ...d } : null); 
-      },
-      getAllUsers: apiService.getAllProfiles,
-      updateUserRole: apiService.updateUserRole,
-      addTicket: async (tk) => { await apiService.submitTicket(tk); setTickets(await apiService.getTickets()); },
-      addNews: async (nw) => { await apiService.addNews(nw); setNews(await apiService.getNews()); },
-      deleteNews: async (id) => { await apiService.deleteNews(id); setNews(prev => prev.filter(n => n.id !== id)); },
-      deleteTicket: async (id) => { await apiService.deleteTicket(id); setTickets(prev => prev.filter(t => t.id !== id)); }
-    }}>
-      {children}
-    </SettingsContext.Provider>
+    <section id="showcase" ref={showcaseRef} className="py-20 md:py-32 bg-[#050505] relative overflow-hidden scroll-mt-20">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,215,0,0.03),transparent_70%)] pointer-events-none"></div>
+      
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="text-center mb-16 md:mb-24 reveal-on-scroll">
+           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card border-gold/10 text-gold text-[10px] font-black uppercase tracking-[0.4em] mb-6">
+             In-Game Snapshots
+           </div>
+           <h2 className="text-4xl md:text-7xl font-display font-black text-white mb-6 uppercase tracking-tighter leading-none">
+             {t.showcaseTitle}
+           </h2>
+           <p className="text-slate-400 text-sm md:text-lg max-w-2xl mx-auto font-medium opacity-80">{t.showcaseSub}</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 md:gap-y-20 gap-x-6 md:gap-x-10">
+          {features.map((feat) => (
+            <div 
+              key={feat.id} 
+              className="reveal-on-scroll flex flex-col items-center group"
+              style={{ transitionDelay: `${feat.delay}ms` }}
+            >
+              <div className="relative w-48 xs:w-56 md:w-64 lg:w-72 mb-8 transition-transform duration-700 group-hover:-translate-y-4 will-change-transform">
+                <div className="relative z-20 aspect-[9/19.5] rounded-[2.5rem] md:rounded-[3rem] border-[6px] md:border-[10px] border-[#1a1a1a] shadow-[0_30px_80px_rgba(0,0,0,0.8)] overflow-hidden bg-[#0a0a0a] ring-1 ring-white/10">
+                   <img 
+                      src={feat.img} 
+                      alt={feat.title} 
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => { 
+                        // تشفير النص لمنع أخطاء الروابط
+                        const encodedText = encodeURIComponent(feat.title);
+                        (e.target as HTMLImageElement).src = `https://placehold.co/800x1600/111111/ffd700?text=${encodedText}`; 
+                      }}
+                      className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-105 will-change-transform" 
+                   />
+                   <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-transparent pointer-events-none"></div>
+                   <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 md:w-28 h-4 md:h-6 bg-[#1a1a1a] rounded-b-xl md:rounded-b-2xl z-30"></div>
+                </div>
+                <div className="absolute inset-4 bg-gold/10 rounded-[3rem] blur-[40px] opacity-0 group-hover:opacity-100 transition-opacity duration-700 -z-10"></div>
+              </div>
+
+              <div className="text-center space-y-2 px-4">
+                <div className="flex justify-center mb-1">
+                  <div className="p-2.5 rounded-xl bg-gold/5 border border-gold/10 text-gold scale-90 md:scale-100 transition-transform group-hover:scale-110">
+                    {feat.icon}
+                  </div>
+                </div>
+                <h3 className="text-xl md:text-2xl font-display font-black text-white uppercase tracking-tight group-hover:text-gold transition-colors">{feat.title}</h3>
+                <p className="text-slate-500 text-xs md:text-sm leading-relaxed max-w-[240px] mx-auto font-medium opacity-80">
+                  {feat.desc}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 };
 
-export const useSettings = () => {
-  const c = useContext(SettingsContext);
-  if (!c) throw new Error('useSettings error');
-  return c;
-};
+export default GameShowcase;

@@ -16,7 +16,7 @@ export const apiService = {
         androidUrl: data.android_url || '#',
         iosUrl: data.ios_url || '#',
         isMaintenanceMode: !!data.is_maintenance_mode,
-        maintenanceMessage: data.maintenance_message || '',
+        maintenance_message: data.maintenance_message || '',
         showcaseImages: data.showcase_images || {},
         translations: data.translations || {},
         socialLinks: data.social_links || {}
@@ -58,7 +58,6 @@ export const apiService = {
     return data || [];
   },
 
-  // Added missing updateUserRole method to fix TypeScript error in SettingsContext.tsx
   updateUserRole: async (id: string, role: 'admin' | 'user') => {
     const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
     if (error) throw error;
@@ -114,25 +113,35 @@ export const apiService = {
   },
 
   uploadImage: async (file: File, bucketName: string = 'assets') => {
-    // تنظيف اسم الملف لمنع أخطاء الرفع
-    const cleanFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-    
-    const { data, error: uploadError } = await supabase.storage
-      .from(bucketName)
-      .upload(cleanFileName, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
+    try {
+      // تحويل الملف إلى ArrayBuffer لضمان استقرار الإرسال عبر الشبكة
+      const arrayBuffer = await file.arrayBuffer();
+      const cleanFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      
+      const { data, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(cleanFileName, arrayBuffer, {
+          contentType: file.type,
+          cacheControl: '3600',
+          upsert: true
+        });
 
-    if (uploadError) {
-      console.error("Upload detail error:", uploadError);
-      throw new Error(`فشل الرفع: ${uploadError.message}`);
+      if (uploadError) {
+        // إذا كان الخطأ متعلقاً بعدم وجود الـ Bucket، سنعطي رسالة واضحة
+        if (uploadError.message.includes('not found') || (uploadError as any).status === 404) {
+          throw new Error(`المجلد '${bucketName}' غير موجود في Supabase Storage. يرجى إنشاؤه وجعله Public.`);
+        }
+        throw uploadError;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(cleanFileName);
+
+      return publicUrl;
+    } catch (e: any) {
+      console.error("Upload Error Details:", e);
+      throw new Error(`فشل الرفع: ${e.message || 'خطأ غير معروف'}`);
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(cleanFileName);
-
-    return publicUrl;
   }
 };

@@ -16,7 +16,7 @@ export const apiService = {
         androidUrl: data.android_url || '#',
         iosUrl: data.ios_url || '#',
         isMaintenanceMode: !!data.is_maintenance_mode,
-        maintenance_message: data.maintenance_message || '',
+        maintenanceMessage: data.maintenance_message || '',
         showcaseImages: data.showcase_images || {},
         translations: data.translations || {},
         socialLinks: data.social_links || {}
@@ -47,46 +47,11 @@ export const apiService = {
     if (error) throw error;
   },
 
-  updateProfile: async (id: string, updates: any) => {
-    const { data, error } = await supabase.from('profiles').update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  getAllProfiles: async () => {
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    return data || [];
-  },
-
-  updateUserRole: async (id: string, role: 'admin' | 'user') => {
-    const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
-    if (error) throw error;
-  },
-
-  getTickets: async () => {
-    const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-    return data || [];
-  },
-
-  submitTicket: async (ticket: any) => {
-    const { error } = await supabase.from('tickets').insert([{
-      name: ticket.name,
-      email: ticket.email,
-      subject: ticket.subject,
-      message: ticket.message,
-      created_at: new Date().toISOString()
-    }]);
-    if (error) throw error;
-  },
-
-  deleteTicket: async (id: number) => {
-    await supabase.from('tickets').delete().eq('id', id);
-  },
-
+  // Map snake_case thumbnail_url to camelCase thumbnailUrl
   getNews: async () => {
     const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
     if (error) return [];
-    return data.map(item => ({
+    return data.map((item: any) => ({
       id: item.id,
       title: item.title,
       excerpt: item.excerpt,
@@ -112,36 +77,75 @@ export const apiService = {
     await supabase.from('news').delete().eq('id', id);
   },
 
-  uploadImage: async (file: File, bucketName: string = 'assets') => {
+  // Map snake_case created_at to camelCase createdAt
+  getTickets: async () => {
+    const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      email: item.email,
+      subject: item.subject,
+      message: item.message,
+      createdAt: item.created_at
+    })) as SupportTicket[];
+  },
+
+  submitTicket: async (ticket: any) => {
+    const { error } = await supabase.from('tickets').insert([{
+      name: ticket.name,
+      email: ticket.email,
+      subject: ticket.subject,
+      message: ticket.message,
+      created_at: new Date().toISOString()
+    }]);
+    if (error) throw error;
+  },
+
+  deleteTicket: async (id: number) => {
+    await supabase.from('tickets').delete().eq('id', id);
+  },
+
+  getAllProfiles: async () => {
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    return data || [];
+  },
+
+  updateUserRole: async (id: string, role: string) => {
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+    if (error) throw error;
+  },
+
+  updateProfile: async (id: string, updates: any) => {
+    const { data, error } = await supabase.from('profiles').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  uploadImage: async (file: File, bucketName: string) => {
     try {
-      // تحويل الملف إلى ArrayBuffer لضمان استقرار الإرسال عبر الشبكة
       const arrayBuffer = await file.arrayBuffer();
-      const cleanFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      
-      const { data, error: uploadError } = await supabase.storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { data, error } = await supabase.storage
         .from(bucketName)
-        .upload(cleanFileName, arrayBuffer, {
+        .upload(filePath, arrayBuffer, {
           contentType: file.type,
-          cacheControl: '3600',
           upsert: true
         });
 
-      if (uploadError) {
-        // إذا كان الخطأ متعلقاً بعدم وجود الـ Bucket، سنعطي رسالة واضحة
-        if (uploadError.message.includes('not found') || (uploadError as any).status === 404) {
-          throw new Error(`المجلد '${bucketName}' غير موجود في Supabase Storage. يرجى إنشاؤه وجعله Public.`);
-        }
-        throw uploadError;
-      }
+      if (error) throw error;
 
       const { data: { publicUrl } } = supabase.storage
         .from(bucketName)
-        .getPublicUrl(cleanFileName);
+        .getPublicUrl(filePath);
 
       return publicUrl;
     } catch (e: any) {
-      console.error("Upload Error Details:", e);
-      throw new Error(`فشل الرفع: ${e.message || 'خطأ غير معروف'}`);
+      console.error("Storage Upload Error:", e);
+      throw e;
     }
   }
 };

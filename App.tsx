@@ -1,5 +1,5 @@
 
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { useSettings, SettingsProvider } from './context/SettingsContext';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -27,7 +27,6 @@ const LoadingScreen = () => (
 const MaintenanceScreen = () => {
   const { settings, navigateTo, user, isAdmin } = useSettings();
   
-  // If admin is logged in, they can bypass
   if (isAdmin) return null;
 
   return (
@@ -60,11 +59,18 @@ const MaintenanceScreen = () => {
 };
 
 function AppContent() {
-  const { currentPage, settings, user, isAdmin, isLoading } = useSettings();
+  const { currentPage, settings, user, isAdmin, isLoading, navigateTo } = useSettings();
+
+  // منع الدخول لصفحة Login إذا كان مسجلاً بالفعل
+  useEffect(() => {
+    if (currentPage === 'login' && user) {
+      navigateTo('site');
+    }
+  }, [currentPage, user, navigateTo]);
 
   if (isLoading) return <LoadingScreen />;
 
-  if (currentPage === 'login') {
+  if (currentPage === 'login' && !user) {
     return (
       <Suspense fallback={<LoadingScreen />}>
         <AuthPage />
@@ -80,7 +86,6 @@ function AppContent() {
     );
   }
 
-  // Show Maintenance Screen if enabled AND user is NOT admin
   if (settings.isMaintenanceMode && !isAdmin) {
     return <MaintenanceScreen />;
   }

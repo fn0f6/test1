@@ -7,7 +7,7 @@ export const apiService = {
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
       if (error) {
-        console.error("Settings DB Error:", error.message, error.details);
+        console.error("❌ Settings DB Error:", error.message, error.details);
         throw error;
       }
       if (!data) return null;
@@ -22,10 +22,12 @@ export const apiService = {
         maintenanceMessage: data.maintenance_message || '',
         showcaseImages: data.showcase_images || {},
         translations: data.translations || {},
-        socialLinks: data.social_links || {}
+        social_links: data.social_links || {}
       };
     } catch (e: any) {
-      console.error("Settings Fetch Error Detail:", e?.message || e);
+      // تحويل الخطأ إلى نص مقروء لتجنب [object Object]
+      const errorMsg = e?.message || JSON.stringify(e);
+      console.error("🚨 Settings Fetch Error Detail:", errorMsg);
       return null;
     }
   },
@@ -42,7 +44,7 @@ export const apiService = {
       maintenance_message: settings.maintenanceMessage,
       showcase_images: settings.showcase_images || settings.showcaseImages,
       translations: settings.translations,
-      social_links: settings.socialLinks,
+      social_links: settings.social_links || settings.socialLinks,
       updated_at: new Date().toISOString()
     };
     
@@ -51,16 +53,21 @@ export const apiService = {
   },
 
   getNews: async () => {
-    const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return data.map((item: any) => ({
-      id: item.id,
-      title: item.title,
-      excerpt: item.excerpt,
-      thumbnailUrl: item.thumbnail_url,
-      category: item.category,
-      date: item.date
-    })) as NewsItem[];
+    try {
+      const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        excerpt: item.excerpt,
+        thumbnailUrl: item.thumbnail_url,
+        category: item.category,
+        date: item.date
+      })) as NewsItem[];
+    } catch (e) {
+      console.error("News Fetch Error:", e);
+      return [];
+    }
   },
 
   addNews: async (news: any) => {
@@ -80,16 +87,21 @@ export const apiService = {
   },
 
   getTickets: async () => {
-    const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return data.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      email: item.email,
-      subject: item.subject,
-      message: item.message,
-      createdAt: item.created_at
-    })) as SupportTicket[];
+    try {
+      const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        subject: item.subject,
+        message: item.message,
+        createdAt: item.created_at
+      })) as SupportTicket[];
+    } catch (e) {
+      console.error("Tickets Fetch Error:", e);
+      return [];
+    }
   },
 
   submitTicket: async (ticket: any) => {
@@ -124,40 +136,25 @@ export const apiService = {
   },
 
   uploadImage: async (file: File, bucketName: string) => {
-    console.log(`🚀 محاولة رفع ملف إلى المجلد: ${bucketName}...`);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("يجب تسجيل الدخول أولاً.");
 
-      // تصحيح اسم الملف (إزالة الحروف العربية والرموز الغريبة)
       const cleanFileName = file.name.replace(/[^\x00-\x7F]/g, "").replace(/\s+/g, "_");
       const fileExt = cleanFileName.split('.').pop() || 'png';
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from(bucketName)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
 
-      if (uploadError) {
-        console.error("Storage Error Object:", uploadError);
-        throw new Error(uploadError.message);
-      }
+      if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
+      const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(filePath);
       return publicUrl;
     } catch (e: any) {
-      console.error("🚨 تفاصيل خطأ الرفع:", e);
-      // معالجة خطأ AbortError بشكل صريح لمعرفة ما إذا كان المتصفح هو السبب
-      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
-        throw new Error("فشل الرفع بسبب انقطاع الشبكة (AbortError). يرجى التأكد من سرعة الإنترنت أو حجم الملف.");
-      }
+      console.error("🚨 Upload Crash:", e.message || e);
       throw e;
     }
   }

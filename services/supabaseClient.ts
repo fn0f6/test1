@@ -2,22 +2,20 @@
 import { createClient } from '@supabase/supabase-js';
 
 const getEnvValue = (key: string): string => {
-  // الأولوية لـ Vite (import.meta.env)
+  // Vite environment
   if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
     const val = (import.meta as any).env[key];
     if (val) return val;
   }
   
-  // ثم Vercel/Node (process.env)
+  // Process environment (Node/Vercel)
   if (typeof process !== 'undefined' && process.env) {
     const val = process.env[key];
     if (val) return val;
-  }
-
-  // محاولة البحث عن المفاتيح بدون بادئة VITE_ في حال وجودها في Vercel
-  const cleanKey = key.replace('VITE_', '');
-  if (typeof process !== 'undefined' && process.env && process.env[cleanKey]) {
-    return process.env[cleanKey] as string;
+    // Try without VITE_ prefix
+    const cleanKey = key.replace('VITE_', '');
+    const valClean = process.env[cleanKey];
+    if (valClean) return valClean;
   }
 
   return '';
@@ -26,8 +24,9 @@ const getEnvValue = (key: string): string => {
 const supabaseUrl = getEnvValue('VITE_SUPABASE_URL') || 'https://yxhqpyhpwumqvytobxtr.supabase.co';
 const supabaseAnonKey = getEnvValue('VITE_SUPABASE_ANON_KEY');
 
+// التحقق من وجود المفتاح في الـ Console للمساعدة في التشخيص
 if (!supabaseAnonKey) {
-  console.warn("⚓ Supabase Anon Key is missing. Storage and Auth features will be limited.");
+  console.error("❌ CRITICAL: Supabase Anon Key is missing! Check your environment variables.");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'missing-key', {
@@ -35,5 +34,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'missing-ke
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true
+  },
+  global: {
+    headers: { 'x-application-name': 'asr-alhamour' }
   }
 });

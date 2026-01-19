@@ -47,7 +47,6 @@ export const apiService = {
     if (error) throw error;
   },
 
-  // Map snake_case thumbnail_url to camelCase thumbnailUrl
   getNews: async () => {
     const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
     if (error) return [];
@@ -77,7 +76,6 @@ export const apiService = {
     await supabase.from('news').delete().eq('id', id);
   },
 
-  // Map snake_case created_at to camelCase createdAt
   getTickets: async () => {
     const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
     if (error) return [];
@@ -124,27 +122,50 @@ export const apiService = {
 
   uploadImage: async (file: File, bucketName: string) => {
     try {
+      // 1. التحقق من الجلسة قبل الرفع لضمان وجود مستخدم
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("انتهت الجلسة، يرجى إعادة تسجيل الدخول.");
+      }
+
+      // 2. تحويل الملف إلى ArrayBuffer (أكثر استقراراً في الرفع المتعدد)
       const arrayBuffer = await file.arrayBuffer();
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
+      
+      // 3. إنشاء اسم فريد للملف لتجنب التكرار
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      const { data, error } = await supabase.storage
+      // 4. تنفيذ عملية الرفع
+      const { data, error: uploadError } = await supabase.storage
         .from(bucketName)
         .upload(filePath, arrayBuffer, {
           contentType: file.type,
-          upsert: true
+          upsert: true,
+          cacheControl: '3600'
         });
 
-      if (error) throw error;
+      if (uploadError) {
+        // فحص نوع الخطأ وإرجاع رسالة عربية مفهومة
+        if (uploadError.message.includes('bucket not found') || (uploadError as any).status === 404) {
+          throw new Error(`خطأ: المجلد "${bucketName}" غير موجود. يرجى إنشاؤه في Supabase Storage.`);
+        }
+        if (uploadError.message.includes('row-level security') || (uploadError as any).status === 403) {
+          throw new Error("خطأ: ليس لديك صلاحية للرفع. تأكد أن حسابك 'admin' والمجلد 'Public'.");
+        }
+        throw uploadError;
+      }
 
+      // 5. جلب الرابط العام للصور
       const { data: { publicUrl } } = supabase.storage
         .from(bucketName)
         .getPublicUrl(filePath);
 
+      if (!publicUrl) throw new Error("فشل توليد رابط الصورة العام.");
+
       return publicUrl;
     } catch (e: any) {
-      console.error("Storage Upload Error:", e);
+      console.error("Storage Error Details:", e);
       throw e;
     }
   }

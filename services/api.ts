@@ -6,7 +6,10 @@ export const apiService = {
   getSettings: async () => {
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
-      if (error) throw error;
+      if (error) {
+        console.error("Settings DB Error:", error.message, error.details);
+        throw error;
+      }
       if (!data) return null;
 
       return {
@@ -21,8 +24,8 @@ export const apiService = {
         translations: data.translations || {},
         socialLinks: data.social_links || {}
       };
-    } catch (e) {
-      console.error("Settings Fetch Error:", e);
+    } catch (e: any) {
+      console.error("Settings Fetch Error Detail:", e?.message || e);
       return null;
     }
   },
@@ -121,52 +124,39 @@ export const apiService = {
   },
 
   uploadImage: async (file: File, bucketName: string) => {
-    console.log(`🚀 Starting upload to bucket: ${bucketName}...`);
+    console.log(`🚀 محاولة رفع ملف إلى المجلد: ${bucketName}...`);
     try {
-      // 1. التحقق من الجلسة
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error("انتهت الجلسة، يرجى إعادة تسجيل الدخول.");
-      }
+      if (!session) throw new Error("يجب تسجيل الدخول أولاً.");
 
-      // 2. تجهيز اسم الملف
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'png';
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      // تصحيح اسم الملف (إزالة الحروف العربية والرموز الغريبة)
+      const cleanFileName = file.name.replace(/[^\x00-\x7F]/g, "").replace(/\s+/g, "_");
+      const fileExt = cleanFileName.split('.').pop() || 'png';
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // 3. محاولة الرفع باستخدام File مباشرة (أكثر استقراراً)
       const { data, error: uploadError } = await supabase.storage
         .from(bucketName)
         .upload(filePath, file, {
-          contentType: file.type,
+          cacheControl: '3600',
           upsert: true
         });
 
       if (uploadError) {
-        console.error("❌ Supabase Upload Error:", uploadError);
-        
-        // رسائل خطأ مفصلة
-        if (uploadError.message.includes('bucket not found') || (uploadError as any).status === 404) {
-          throw new Error(`المجلد "${bucketName}" غير موجود. يرجى إنشاؤه في Supabase Storage وجعله Public.`);
-        }
-        if (uploadError.message.includes('row-level security') || (uploadError as any).status === 403) {
-          throw new Error("ليس لديك صلاحية للرفع. تأكد أن المجلد 'Public' وأن حسابك 'admin'.");
-        }
-        throw new Error(`خطأ في الرفع: ${uploadError.message}`);
+        console.error("Storage Error Object:", uploadError);
+        throw new Error(uploadError.message);
       }
 
-      // 4. جلب الرابط العام
       const { data: { publicUrl } } = supabase.storage
         .from(bucketName)
         .getPublicUrl(filePath);
 
-      console.log(`✅ Upload successful! URL: ${publicUrl}`);
       return publicUrl;
     } catch (e: any) {
-      console.error("🚨 Final Upload Crash:", e);
-      // إذا كان الخطأ AbortError، فهذا يعني أن المتصفح قطع الاتصال
-      if (e.name === 'AbortError') {
-        throw new Error("انقطع الاتصال أثناء الرفع. يرجى المحاولة مرة أخرى أو استخدام متصفح مختلف.");
+      console.error("🚨 تفاصيل خطأ الرفع:", e);
+      // معالجة خطأ AbortError بشكل صريح لمعرفة ما إذا كان المتصفح هو السبب
+      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
+        throw new Error("فشل الرفع بسبب انقطاع الشبكة (AbortError). يرجى التأكد من سرعة الإنترنت أو حجم الملف.");
       }
       throw e;
     }

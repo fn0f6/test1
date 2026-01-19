@@ -35,8 +35,9 @@ interface SettingsContextType {
   getAllUsers: () => Promise<UserProfile[]>;
   updateUserRole: (id: string, role: 'admin' | 'user') => Promise<void>;
   isAdmin: boolean;
-  login: (email: string, pass: string) => Promise<{ error: any }>;
-  signup: (email: string, pass: string) => Promise<{ error: any; message?: string }>;
+  // Fix: Updated return types to include 'data' property as expected by components/AdminLogin.tsx
+  login: (email: string, pass: string) => Promise<{ data: any; error: any }>;
+  signup: (email: string, pass: string) => Promise<{ data: any; error: any; message?: string }>;
   logout: () => Promise<void>;
   lang: Language; setLang: (lang: Language) => void; t: any;
 }

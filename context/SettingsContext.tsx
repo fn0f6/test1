@@ -73,41 +73,26 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchUserProfile = async (id: string, email: string) => {
     if (!isSupabaseConfigured || !isMounted.current) return;
-    
-    // وضع حالة مبدئية للمستخدم لضمان تحويله للموقع حتى لو لم يوجد البروفايل فوراً
     setUser({ id, email, role: 'user' });
-
     try {
-      // محاولة استرجاع البيانات - قد نحتاج لأكثر من محاولة في حال تأخر الـ Trigger
       let attempts = 0;
       let userData = null;
-
       while (attempts < 3 && !userData && isMounted.current) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-        if (data) {
-          userData = data;
-          break;
-        }
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+        if (data) { userData = data; break; }
         attempts++;
-        if (!userData && attempts < 3) await new Promise(r => setTimeout(r, 800)); // انتظر قليلاً قبل المحاولة التالية
+        if (!userData && attempts < 3) await new Promise(r => setTimeout(r, 1000));
       }
-
       if (userData && isMounted.current) {
-        setUser({ 
-          id, 
-          email, 
-          role: userData.role as 'admin' | 'user', 
-          display_name: userData.display_name, 
-          avatar_url: userData.avatar_url 
-        });
+        setUser({ id, email, role: userData.role as 'admin' | 'user', display_name: userData.display_name, avatar_url: userData.avatar_url });
       }
-    } catch (e) {
-      console.error("Fetch profile failed", e);
-    }
+    } catch (e) { console.warn("Profile fetch skipped or aborted"); }
   };
 
   useEffect(() => {
     isMounted.current = true;
+    const startTime = Date.now();
+    
     const init = async () => {
       try {
         if (isSupabaseConfigured) {
@@ -116,12 +101,31 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             await fetchUserProfile(session.user.id, session.user.email!);
           }
         }
-        const [s, n, t] = await Promise.all([apiService.getSettings(), apiService.getNews(), apiService.getTickets()]);
+        
+        const [settingsResult, newsResult, ticketsResult] = await Promise.allSettled([
+          apiService.getSettings(),
+          apiService.getNews(),
+          apiService.getTickets()
+        ]);
+
         if (isMounted.current) {
-          if (s) setSettings(prev => ({ ...prev, ...s }));
-          setNews(n || []);
-          setTickets(t || []);
-          setIsLoading(false);
+          if (settingsResult.status === 'fulfilled' && settingsResult.value) {
+            setSettings(prev => ({ ...prev, ...settingsResult.value }));
+          }
+          if (newsResult.status === 'fulfilled') {
+            setNews(newsResult.value || []);
+          }
+          if (ticketsResult.status === 'fulfilled') {
+            setTickets(ticketsResult.value || []);
+          }
+          
+          // ضمان بقاء شاشة التحميل لمدة لا تقل عن 2000ms
+          const elapsedTime = Date.now() - startTime;
+          const remainingTime = Math.max(0, 2000 - elapsedTime);
+          
+          setTimeout(() => {
+            if (isMounted.current) setIsLoading(false);
+          }, remainingTime);
         }
       } catch (e) {
         if (isMounted.current) setIsLoading(false);

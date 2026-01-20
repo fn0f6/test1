@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
-import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
+import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const AuthPage: React.FC = () => {
   const { login, signup, navigateTo, user } = useSettings();
@@ -18,10 +18,11 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
+  // تحويل المستخدم بمجرد تحديث حالة user
   useEffect(() => {
-    // التوجيه التلقائي فقط إذا لم نكن في حالة تحميل
-    if (user && !loading) {
-      navigateTo(user.role === 'admin' ? 'admin' : 'site');
+    if (user && !loading && isMounted.current) {
+      // تحويل المستخدم فوراً
+      navigateTo('site');
     }
   }, [user, navigateTo, loading]);
 
@@ -38,34 +39,33 @@ const AuthPage: React.FC = () => {
         const { data, error: loginErr } = await login(email, password);
         if (loginErr) {
           if (isMounted.current) setError(loginErr.message || "فشل تسجيل الدخول");
+          if (isMounted.current) setLoading(false);
         } else if (data?.user) {
           if (isMounted.current) setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التحويل...");
+          // التحويل سيتم عبر useEffect عند تحديث حالة user
         }
       } else {
         const { data, error: signupErr } = await signup(email, password);
         if (signupErr) {
           if (isMounted.current) setError(signupErr.message || "فشل إنشاء الحساب");
+          if (isMounted.current) setLoading(false);
         } else {
           if (isMounted.current) {
             if (data?.session) {
               setSuccessMsg("تم إنشاء الحساب بنجاح! جاري الدخول...");
+              // التحويل سيتم عبر useEffect
             } else {
               setSuccessMsg("تم إنشاء الحساب! أرسلنا لك بريداً ترحيبياً، يرجى تفعيل الحساب.");
+              setLoading(false);
             }
           }
         }
       }
     } catch (err: any) {
       if (isMounted.current) {
-        // معالجة خطأ Abort بشكل صامت أو ودود
-        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
-          console.warn("Request was aborted (probably due to navigation)");
-        } else {
-          setError(err.message || "حدث خطأ في الاتصال");
-        }
+        setError(err.message || "حدث خطأ في الاتصال");
+        setLoading(false);
       }
-    } finally {
-      if (isMounted.current) setLoading(false);
     }
   };
 
@@ -102,14 +102,14 @@ const AuthPage: React.FC = () => {
             <button 
               disabled={loading}
               onClick={() => { setIsLoginMode(true); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white disabled:opacity-30'}`}
+              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white'}`}
             >
               دخول
             </button>
             <button 
               disabled={loading}
               onClick={() => { setIsLoginMode(false); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white disabled:opacity-30'}`}
+              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white'}`}
             >
               تسجيل
             </button>

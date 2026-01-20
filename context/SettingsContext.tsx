@@ -61,6 +61,9 @@ const DEFAULT_SETTINGS: SiteSettings = {
   }
 };
 
+// البريد الإلكتروني الرئيسي للأدمن (لضمان الدخول دائماً)
+const MASTER_ADMIN_EMAIL = 'aaatay3@gmail.com';
+
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPage, setCurrentPage] = useState<'site' | 'admin' | 'login'>('site');
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -73,11 +76,35 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchUserProfile = async (id: string, email: string) => {
     if (!isSupabaseConfigured || !isMounted.current) return;
-    setUser({ id, email, role: 'user' });
+    
+    // إعداد أولي
+    let role: 'admin' | 'user' = 'user';
+    // Master Admin Override: إذا كان البريد هو البريد الرئيسي، اجعله أدمن فوراً
+    if (email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) {
+      role = 'admin';
+    }
+
+    setUser({ id, email, role });
+    
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
       if (data && isMounted.current) {
-        setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
+        let dbRole = data.role as 'admin' | 'user';
+        
+        // إذا كان المستخدم هو الماستر أدمن ولكن القاعدة تقول user، نقوم بالتصحيح التلقائي
+        if (email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase() && dbRole !== 'admin') {
+           console.log("Auto-correcting master admin role...");
+           await supabase.from('profiles').update({ role: 'admin' }).eq('id', id);
+           dbRole = 'admin';
+        }
+
+        setUser({ 
+          id, 
+          email, 
+          role: dbRole, 
+          display_name: data.display_name, 
+          avatar_url: data.avatar_url 
+        });
       }
     } catch (e) { console.warn("Profile fetch error", e); }
   };
@@ -86,7 +113,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     isMounted.current = true;
     const startTime = Date.now();
     
-    // Safety Force Start: إذا لم ينتهِ التحميل خلال 5 ثوانٍ، سنفتحه إجبارياً
     const forceStart = setTimeout(() => {
       if (isMounted.current && isLoading) {
         console.warn("API load taking too long, forcing start...");

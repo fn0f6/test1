@@ -130,9 +130,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           options: { data: { display_name: displayName } }
         });
         
-        // إذا نجح الإنشاء، نقوم بإرسال بريد الترحيب
+        // إرسال بريد الترحيب في الخلفية لضمان عدم حدوث Abort للطلب الرئيسي
         if (!res.error && (res.data.user || res.data.session)) {
-          await apiService.sendWelcomeEmail(email, displayName);
+          apiService.sendWelcomeEmail(email, displayName).catch(err => console.error("Welcome email background fail:", err));
         }
         
         return res;

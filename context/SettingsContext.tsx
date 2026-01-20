@@ -73,10 +73,33 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchUserProfile = async (id: string, email: string) => {
     if (!isSupabaseConfigured || !isMounted.current) return;
+    
+    // وضع حالة مبدئية للمستخدم لضمان تحويله للموقع حتى لو لم يوجد البروفايل فوراً
+    setUser({ id, email, role: 'user' });
+
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (data && isMounted.current) {
-        setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
+      // محاولة استرجاع البيانات - قد نحتاج لأكثر من محاولة في حال تأخر الـ Trigger
+      let attempts = 0;
+      let userData = null;
+
+      while (attempts < 3 && !userData && isMounted.current) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+        if (data) {
+          userData = data;
+          break;
+        }
+        attempts++;
+        if (!userData && attempts < 3) await new Promise(r => setTimeout(r, 800)); // انتظر قليلاً قبل المحاولة التالية
+      }
+
+      if (userData && isMounted.current) {
+        setUser({ 
+          id, 
+          email, 
+          role: userData.role as 'admin' | 'user', 
+          display_name: userData.display_name, 
+          avatar_url: userData.avatar_url 
+        });
       }
     } catch (e) {
       console.error("Fetch profile failed", e);
@@ -108,8 +131,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted.current) return;
-      if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
-      else setUser(null);
+      if (session?.user) {
+        await fetchUserProfile(session.user.id, session.user.email!);
+      } else {
+        setUser(null);
+      }
     });
 
     return () => {

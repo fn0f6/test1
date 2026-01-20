@@ -18,11 +18,15 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
-  // تحويل المستخدم بمجرد تحديث حالة user
+  // تحويل المستخدم بناءً على الرتبة فور توفر البيانات
   useEffect(() => {
     if (user && !loading && isMounted.current) {
-      // تحويل المستخدم فوراً
-      navigateTo('site');
+      // إذا كان أدمن يذهب للوحة التحكم، وإلا يذهب للموقع الرئيسي
+      if (user.role === 'admin') {
+        navigateTo('admin');
+      } else {
+        navigateTo('site');
+      }
     }
   }, [user, navigateTo, loading]);
 
@@ -38,22 +42,27 @@ const AuthPage: React.FC = () => {
       if (isLoginMode) {
         const { data, error: loginErr } = await login(email, password);
         if (loginErr) {
-          if (isMounted.current) setError(loginErr.message || "فشل تسجيل الدخول");
-          if (isMounted.current) setLoading(false);
+          if (isMounted.current) {
+            setError(loginErr.message || "فشل تسجيل الدخول");
+            setLoading(false);
+          }
         } else if (data?.user) {
-          if (isMounted.current) setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التحويل...");
-          // التحويل سيتم عبر useEffect عند تحديث حالة user
+          if (isMounted.current) {
+            setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التوجيه للوحة القيادة...");
+          }
+          // التحويل سيتم عبر useEffect تلقائياً عند تحديث حالة user
         }
       } else {
         const { data, error: signupErr } = await signup(email, password);
         if (signupErr) {
-          if (isMounted.current) setError(signupErr.message || "فشل إنشاء الحساب");
-          if (isMounted.current) setLoading(false);
+          if (isMounted.current) {
+            setError(signupErr.message || "فشل إنشاء الحساب");
+            setLoading(false);
+          }
         } else {
           if (isMounted.current) {
             if (data?.session) {
               setSuccessMsg("تم إنشاء الحساب بنجاح! جاري الدخول...");
-              // التحويل سيتم عبر useEffect
             } else {
               setSuccessMsg("تم إنشاء الحساب! أرسلنا لك بريداً ترحيبياً، يرجى تفعيل الحساب.");
               setLoading(false);
@@ -162,7 +171,7 @@ const AuthPage: React.FC = () => {
                   <CheckCircle2 size={24} />
                 </div>
                 <div>
-                  <p className="text-emerald-400 text-[11px] font-black uppercase tracking-widest">{successMsg}</p>
+                  <p className="text-emerald-400 text-[11px] font-black uppercase tracking-widest text-center leading-relaxed">{successMsg}</p>
                 </div>
               </div>
             )}

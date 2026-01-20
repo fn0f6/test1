@@ -2,7 +2,7 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { NewsItem, SupportTicket } from '../types';
 
-export const apiService = {
+const apiService = {
   getSettings: async () => {
     if (!isSupabaseConfigured) return null;
     try {
@@ -25,6 +25,7 @@ export const apiService = {
         socialLinks: data.social_links || {}
       };
     } catch (e) {
+      console.error("API getSettings failed", e);
       return null;
     }
   },
@@ -52,6 +53,7 @@ export const apiService = {
       const { error } = await supabase.from('settings').upsert(dbPayload);
       if (error) throw error;
     } catch (e) {
+      console.error("API updateSettings failed", e);
       throw e;
     }
   },
@@ -61,7 +63,7 @@ export const apiService = {
     try {
       const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      return data.map((item: any) => ({
+      return (data || []).map((item: any) => ({
         id: item.id,
         title: item.title,
         excerpt: item.excerpt,
@@ -70,6 +72,7 @@ export const apiService = {
         date: item.date
       })) as NewsItem[];
     } catch (e) {
+      console.error("API getNews failed", e);
       return [];
     }
   },
@@ -97,8 +100,9 @@ export const apiService = {
     try {
       const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
       if (error) throw error;
-      return data as SupportTicket[];
+      return (data || []) as SupportTicket[];
     } catch (e) {
+      console.error("API getTickets failed", e);
       return [];
     }
   },
@@ -122,7 +126,7 @@ export const apiService = {
   getAllProfiles: async () => {
     if (!isSupabaseConfigured) return [];
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    return error ? [] : data;
+    return error ? [] : (data || []);
   },
 
   updateUserRole: async (id: string, role: string) => {
@@ -144,10 +148,12 @@ export const apiService = {
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from(bucketName).upload(fileName, file);
       if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
-      return publicUrl;
+      const { data } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+      return data?.publicUrl || '';
     } catch (e: any) {
       throw new Error(`Upload failed: ${e.message}`);
     }
   }
 };
+
+export { apiService };

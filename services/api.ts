@@ -2,42 +2,24 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { NewsItem, SupportTicket, UserProfile } from '../types';
 
-// --- MOCK DATA ---
-const MOCK_NEWS: NewsItem[] = [
-  { id: '1', title: 'Welcome to the Fleet', excerpt: 'The dashboard is running in demo mode. Configure Supabase to see real data.', category: 'System', date: new Date().toLocaleDateString('en-US'), thumbnailUrl: 'https://images.unsplash.com/photo-1596529896791-537449298538' },
-  { id: '2', title: 'Storm Ahead', excerpt: 'Prepare the ships for a heavy storm approaching from the north.', category: 'Weather', date: new Date().toLocaleDateString('en-US'), thumbnailUrl: 'https://images.unsplash.com/photo-1500043204644-768d20653f32' }
-];
-
-const MOCK_TICKETS: SupportTicket[] = [
-  { id: 1, name: 'Jack', email: 'jack@pirate.com', subject: 'Login Issue', message: 'Cannot access my quarters.', createdAt: new Date().toISOString() }
-];
-
-const MOCK_PROFILES: UserProfile[] = [
-  { id: 'mock-admin', email: 'admin@fleet.com', role: 'admin', display_name: 'Fleet Admiral', avatar_url: '' },
-  { id: 'mock-user', email: 'crew@fleet.com', role: 'user', display_name: 'Deck Hand', avatar_url: '' }
-];
-
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const apiService = {
-  // --- إرسال بريد ترحيبي ---
+  // --- إرسال بريد ترحيبي (محاكاة) ---
   sendWelcomeEmail: async (email: string, displayName: string) => {
     console.log(`📧 Sending Welcome Email to: ${email}`);
-    console.log(`📝 Content: Ahoy ${displayName}! Welcome to Asr Al-Hamour. Log in here: ${window.location.origin}/login`);
-    
-    // محاكاة تأخير الشبكة
-    await delay(1000);
-    
-    // ملاحظة: في بيئة الإنتاج، يتم ربط هذا بـ Supabase Edge Function أو Resend/SendGrid API
-    return { success: true, message: "Welcome email dispatched!" };
+    await delay(500);
+    return { success: true };
   },
 
+  // --- إعدادات الموقع ---
   getSettings: async () => {
     if (!isSupabaseConfigured) return null;
     try {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
       if (error) throw error;
       if (!data) return null;
+      
       return {
         logoUrl: data.logo_url,
         heroBgUrl: data.hero_bg_url,
@@ -46,20 +28,20 @@ export const apiService = {
         iosUrl: data.ios_url,
         isMaintenanceMode: !!data.is_maintenance_mode,
         maintenanceMessage: data.maintenance_message,
+        qrData: data.qr_data,
+        customQrUrl: data.custom_qr_url,
         showcaseImages: data.showcase_images || {},
         translations: data.translations || {},
-        socialLinks: data.social_links || {},
-        qrData: data.qr_data || '',
-        customQrUrl: data.custom_qr_url || ''
+        socialLinks: data.social_links || {}
       };
-    } catch (e: any) {
-      console.warn("Settings API Error:", e?.message || e);
+    } catch (e) {
+      console.error("API getSettings Error:", e);
       return null;
     }
   },
 
   updateSettings: async (settings: any) => {
-    if (!isSupabaseConfigured) { await delay(300); return; }
+    if (!isSupabaseConfigured) return;
     try {
       const dbPayload = {
         id: 1,
@@ -70,39 +52,34 @@ export const apiService = {
         ios_url: settings.iosUrl,
         is_maintenance_mode: settings.isMaintenanceMode,
         maintenance_message: settings.maintenanceMessage,
+        qr_data: settings.qrData,
+        custom_qr_url: settings.customQrUrl,
         showcase_images: settings.showcaseImages,
         translations: settings.translations,
         social_links: settings.socialLinks,
-        qr_data: settings.qrData,
-        custom_qr_url: settings.customQrUrl,
         updated_at: new Date().toISOString()
       };
+      
       const { error } = await supabase.from('settings').upsert(dbPayload);
       if (error) throw error;
     } catch (e) {
-      console.error("Failed to update settings:", e);
+      console.error("API updateSettings Error:", e);
       throw e;
     }
   },
 
+  // --- الأخبار ---
   getNews: async () => {
-    if (!isSupabaseConfigured) return MOCK_NEWS;
-    try {
-      const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []).map((item: any) => ({
-        id: item.id, title: item.title, excerpt: item.excerpt, thumbnailUrl: item.thumbnail_url, category: item.category, date: item.date
-      })) as NewsItem[];
-    } catch (error: any) {
-      return MOCK_NEWS;
-    }
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data.map((item: any) => ({
+      id: item.id, title: item.title, excerpt: item.excerpt, thumbnailUrl: item.thumbnail_url, category: item.category, date: item.date
+    })) as NewsItem[];
   },
 
   addNews: async (news: any) => {
-    if (!isSupabaseConfigured) {
-      MOCK_NEWS.unshift({ ...news, id: Date.now().toString(), date: new Date().toLocaleDateString() });
-      return;
-    }
+    if (!isSupabaseConfigured) return;
     const { error } = await supabase.from('news').insert([{
       title: news.title, excerpt: news.excerpt, thumbnail_url: news.thumbnailUrl, category: news.category,
       date: new Date().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -116,24 +93,17 @@ export const apiService = {
     await supabase.from('news').delete().eq('id', id);
   },
 
+  // --- تذاكر الدعم ---
   getTickets: async () => {
-    if (!isSupabaseConfigured) return MOCK_TICKETS;
-    try {
-      const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data || []).map((item: any) => ({
-        id: item.id, name: item.name, email: item.email, subject: item.subject, message: item.message, createdAt: item.created_at
-      })) as SupportTicket[];
-    } catch (error) {
-      return MOCK_TICKETS;
-    }
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+    if (error) return [];
+    return data as SupportTicket[];
   },
 
   submitTicket: async (ticket: any) => {
     if (!isSupabaseConfigured) return;
-    await supabase.from('tickets').insert([{
-      name: ticket.name, email: ticket.email, subject: ticket.subject, message: ticket.message, created_at: new Date().toISOString()
-    }]);
+    await supabase.from('tickets').insert([{ ...ticket, created_at: new Date().toISOString() }]);
   },
 
   deleteTicket: async (id: number) => {
@@ -141,15 +111,11 @@ export const apiService = {
     await supabase.from('tickets').delete().eq('id', id);
   },
 
+  // --- ملفات المستخدمين ---
   getAllProfiles: async () => {
-    if (!isSupabaseConfigured) return MOCK_PROFILES;
-    try {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data || [];
-    } catch (e) {
-      return MOCK_PROFILES;
-    }
+    if (!isSupabaseConfigured) return [];
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    return error ? [] : data;
   },
 
   updateUserRole: async (id: string, role: string) => {
@@ -158,26 +124,19 @@ export const apiService = {
   },
 
   updateProfile: async (id: string, updates: any) => {
-    if (!isSupabaseConfigured) return { ...MOCK_PROFILES[0], ...updates };
-    try {
-      const { data, error } = await supabase.from('profiles').update(updates).eq('id', id).select().single();
-      if (error) throw error;
-      if (updates.display_name || updates.avatar_url) {
-        await supabase.auth.updateUser({ data: { display_name: updates.display_name, avatar_url: updates.avatar_url } });
-      }
-      return data;
-    } catch (err) { throw err; }
+    if (!isSupabaseConfigured) return null;
+    const { data, error } = await supabase.from('profiles').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   uploadImage: async (file: File, bucketName: string) => {
     if (!isSupabaseConfigured) return URL.createObjectURL(file);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from(bucketName).upload(fileName, file);
-      if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
-      return publicUrl;
-    } catch (err: any) { throw new Error(`فشل الرفع: ${err.message}`); }
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from(bucketName).upload(fileName, file);
+    if (uploadError) throw uploadError;
+    const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+    return publicUrl;
   }
 };

@@ -2,13 +2,10 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { NewsItem, SupportTicket, UserProfile } from '../types';
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const apiService = {
   // --- إرسال بريد ترحيبي (محاكاة) ---
   sendWelcomeEmail: async (email: string, displayName: string) => {
-    console.log(`📧 Sending Welcome Email to: ${email}`);
-    await delay(500);
+    console.log(`📧 Welcome email simulation for: ${email}`);
     return { success: true };
   },
 
@@ -35,7 +32,7 @@ export const apiService = {
         socialLinks: data.social_links || {}
       };
     } catch (e) {
-      console.error("API getSettings Error:", e);
+      console.error("API Error [getSettings]:", e);
       return null;
     }
   },
@@ -63,7 +60,7 @@ export const apiService = {
       const { error } = await supabase.from('settings').upsert(dbPayload);
       if (error) throw error;
     } catch (e) {
-      console.error("API updateSettings Error:", e);
+      console.error("API Error [updateSettings]:", e);
       throw e;
     }
   },
@@ -71,17 +68,29 @@ export const apiService = {
   // --- الأخبار ---
   getNews: async () => {
     if (!isSupabaseConfigured) return [];
-    const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return data.map((item: any) => ({
-      id: item.id, title: item.title, excerpt: item.excerpt, thumbnailUrl: item.thumbnail_url, category: item.category, date: item.date
-    })) as NewsItem[];
+    try {
+      const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        excerpt: item.excerpt,
+        thumbnailUrl: item.thumbnail_url,
+        category: item.category,
+        date: item.date
+      })) as NewsItem[];
+    } catch (e) {
+      return [];
+    }
   },
 
   addNews: async (news: any) => {
     if (!isSupabaseConfigured) return;
     const { error } = await supabase.from('news').insert([{
-      title: news.title, excerpt: news.excerpt, thumbnail_url: news.thumbnailUrl, category: news.category,
+      title: news.title,
+      excerpt: news.excerpt,
+      thumbnail_url: news.thumbnailUrl,
+      category: news.category,
       date: new Date().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }),
       created_at: new Date().toISOString()
     }]);
@@ -96,14 +105,24 @@ export const apiService = {
   // --- تذاكر الدعم ---
   getTickets: async () => {
     if (!isSupabaseConfigured) return [];
-    const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-    if (error) return [];
-    return data as SupportTicket[];
+    try {
+      const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as SupportTicket[];
+    } catch (e) {
+      return [];
+    }
   },
 
   submitTicket: async (ticket: any) => {
     if (!isSupabaseConfigured) return;
-    await supabase.from('tickets').insert([{ ...ticket, created_at: new Date().toISOString() }]);
+    await supabase.from('tickets').insert([{ 
+      name: ticket.name, 
+      email: ticket.email, 
+      subject: ticket.subject, 
+      message: ticket.message,
+      created_at: new Date().toISOString() 
+    }]);
   },
 
   deleteTicket: async (id: number) => {
@@ -132,11 +151,15 @@ export const apiService = {
 
   uploadImage: async (file: File, bucketName: string) => {
     if (!isSupabaseConfigured) return URL.createObjectURL(file);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-    const { error: uploadError } = await supabase.storage.from(bucketName).upload(fileName, file);
-    if (uploadError) throw uploadError;
-    const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
-    return publicUrl;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from(bucketName).upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+      return publicUrl;
+    } catch (e: any) {
+      throw new Error(`Upload failed: ${e.message}`);
+    }
   }
 };

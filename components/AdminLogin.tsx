@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
 
@@ -11,15 +11,24 @@ const AuthPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    if (user) {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    // التوجيه التلقائي فقط إذا لم نكن في حالة تحميل
+    if (user && !loading) {
       navigateTo(user.role === 'admin' ? 'admin' : 'site');
     }
-  }, [user, navigateTo]);
+  }, [user, navigateTo, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
@@ -28,26 +37,35 @@ const AuthPage: React.FC = () => {
       if (isLoginMode) {
         const { data, error: loginErr } = await login(email, password);
         if (loginErr) {
-          setError(loginErr.message || "فشل تسجيل الدخول");
+          if (isMounted.current) setError(loginErr.message || "فشل تسجيل الدخول");
         } else if (data?.user) {
-          setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التحويل...");
+          if (isMounted.current) setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التحويل...");
         }
       } else {
         const { data, error: signupErr } = await signup(email, password);
         if (signupErr) {
-          setError(signupErr.message || "فشل إنشاء الحساب");
+          if (isMounted.current) setError(signupErr.message || "فشل إنشاء الحساب");
         } else {
-          if (data?.session) {
-            setSuccessMsg("تم إنشاء الحساب وإرسال بريد الترحيب بنجاح! جاري الدخول...");
-          } else {
-            setSuccessMsg("تم إنشاء الحساب! أرسلنا لك بريداً ترحيبياً، يرجى تفعيل الحساب قبل تسجيل الدخول.");
+          if (isMounted.current) {
+            if (data?.session) {
+              setSuccessMsg("تم إنشاء الحساب بنجاح! جاري الدخول...");
+            } else {
+              setSuccessMsg("تم إنشاء الحساب! أرسلنا لك بريداً ترحيبياً، يرجى تفعيل الحساب.");
+            }
           }
         }
       }
     } catch (err: any) {
-      setError(err.message || "حدث خطأ في الاتصال");
+      if (isMounted.current) {
+        // معالجة خطأ Abort بشكل صامت أو ودود
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          console.warn("Request was aborted (probably due to navigation)");
+        } else {
+          setError(err.message || "حدث خطأ في الاتصال");
+        }
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   };
 
@@ -60,7 +78,8 @@ const AuthPage: React.FC = () => {
       <div className="w-full max-w-md animate-fade-in-up">
         <button 
           onClick={() => navigateTo('site')}
-          className="flex items-center gap-2 text-wood-500 hover:text-gold transition-colors mb-8 font-bold uppercase tracking-widest text-xs group"
+          disabled={loading}
+          className="flex items-center gap-2 text-wood-500 hover:text-gold transition-colors mb-8 font-bold uppercase tracking-widest text-xs group disabled:opacity-30"
         >
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> العودة للرئيسية
         </button>
@@ -81,14 +100,16 @@ const AuthPage: React.FC = () => {
 
           <div className="flex bg-black/40 p-1 rounded-xl mb-8 border border-white/5">
             <button 
+              disabled={loading}
               onClick={() => { setIsLoginMode(true); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white'}`}
+              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white disabled:opacity-30'}`}
             >
               دخول
             </button>
             <button 
+              disabled={loading}
               onClick={() => { setIsLoginMode(false); setError(null); setSuccessMsg(null); }}
-              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white'}`}
+              className={`flex-1 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${!isLoginMode ? 'bg-gold text-black shadow-lg' : 'text-wood-500 hover:text-white disabled:opacity-30'}`}
             >
               تسجيل
             </button>
@@ -102,9 +123,10 @@ const AuthPage: React.FC = () => {
                 <input 
                   type="email" 
                   value={email}
+                  disabled={loading}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="captain@fleet.com"
-                  className="w-full bg-black/60 border border-white/10 rounded-2xl pl-14 pr-6 py-4 outline-none focus:border-gold/50 transition-all text-white"
+                  className="w-full bg-black/60 border border-white/10 rounded-2xl pl-14 pr-6 py-4 outline-none focus:border-gold/50 transition-all text-white disabled:opacity-50"
                   required
                 />
               </div>
@@ -117,9 +139,10 @@ const AuthPage: React.FC = () => {
                 <input 
                   type="password" 
                   value={password}
+                  disabled={loading}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-black/60 border border-white/10 rounded-2xl pl-14 pr-6 py-4 outline-none focus:border-gold/50 transition-all text-white"
+                  className="w-full bg-black/60 border border-white/10 rounded-2xl pl-14 pr-6 py-4 outline-none focus:border-gold/50 transition-all text-white disabled:opacity-50"
                   required
                   minLength={6}
                 />
@@ -140,11 +163,6 @@ const AuthPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-emerald-400 text-[11px] font-black uppercase tracking-widest">{successMsg}</p>
-                  {!isLoginMode && (
-                    <p className="text-emerald-500/60 text-[9px] mt-1 font-bold flex items-center justify-center gap-1">
-                      <Send size={10} /> تم إرسال بريد الترحيب للعنوان المذكور
-                    </p>
-                  )}
                 </div>
               </div>
             )}
@@ -152,7 +170,7 @@ const AuthPage: React.FC = () => {
             <button 
               type="submit"
               disabled={loading}
-              className="w-full bg-gold text-wood-900 font-black h-14 rounded-2xl uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(255,215,0,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mt-4"
+              className="w-full bg-gold text-wood-900 font-black h-14 rounded-2xl uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(255,215,0,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mt-4 disabled:grayscale disabled:opacity-50"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : (isLoginMode ? <><LogIn size={18} /> دخول</> : <><UserPlus size={18} /> انضمام</>)}
             </button>

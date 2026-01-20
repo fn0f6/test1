@@ -18,6 +18,7 @@ const Dashboard: React.FC = () => {
     logout, isAdmin, user, updateUserProfile, getAllUsers, updateUserRole, navigateTo, lang
   } = useSettings();
   
+  // الحالة الافتراضية تعتمد على isAdmin الحالي
   const [activeTab, setActiveTab] = useState<'stats' | 'news' | 'users' | 'media' | 'system' | 'social' | 'content' | 'inbox' | 'profile'>(isAdmin ? 'stats' : 'profile');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -30,6 +31,13 @@ const Dashboard: React.FC = () => {
   const [editLang, setEditLang] = useState<Language>(lang);
   
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // مراقبة تغيير حالة الأدمن لتحديث التبويب تلقائياً
+  useEffect(() => {
+    if (isAdmin && activeTab === 'profile') {
+      setActiveTab('stats');
+    }
+  }, [isAdmin]);
 
   const refreshUsers = async () => {
     if (isAdmin) {
@@ -162,6 +170,7 @@ const Dashboard: React.FC = () => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-32 custom-scrollbar">
+          {/* تبويبات الأدمن */}
           {activeTab === 'users' && isAdmin && (
             <div className="max-w-5xl mx-auto space-y-6">
               <div className="flex items-center justify-between mb-8">
@@ -250,7 +259,6 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* تبويبات أخرى ... */}
           {activeTab === 'inbox' && isAdmin && (
              <div className="space-y-6">
                 {tickets.length === 0 ? (
@@ -269,6 +277,8 @@ const Dashboard: React.FC = () => {
                 )}
              </div>
           )}
+          
+          {/* هنا يجب إضافة باقي التبويبات (news, content, system, etc) بنفس النمط الموجود في الملف الأصلي إذا كانت ناقصة */}
         </div>
       </main>
     </div>

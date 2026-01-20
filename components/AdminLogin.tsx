@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext';
-import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2, Send } from 'lucide-react';
 
 const AuthPage: React.FC = () => {
   const { login, signup, navigateTo, user } = useSettings();
@@ -12,7 +12,6 @@ const AuthPage: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // إذا كان المستخدم مسجلاً بالفعل، قم بتوجيهه فوراً إلى الموقع
   useEffect(() => {
     if (user) {
       navigateTo(user.role === 'admin' ? 'admin' : 'site');
@@ -31,7 +30,6 @@ const AuthPage: React.FC = () => {
         if (loginErr) {
           setError(loginErr.message || "فشل تسجيل الدخول");
         } else if (data?.user) {
-          // نجاح الدخول - سيقوم useEffect بالأعلى بالتوجيه
           setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التحويل...");
         }
       } else {
@@ -39,12 +37,10 @@ const AuthPage: React.FC = () => {
         if (signupErr) {
           setError(signupErr.message || "فشل إنشاء الحساب");
         } else {
-          // في حال كان الـ Session موجوداً (تم الدخول تلقائياً)
           if (data?.session) {
-            setSuccessMsg("تم إنشاء الحساب والدخول بنجاح!");
+            setSuccessMsg("تم إنشاء الحساب وإرسال بريد الترحيب بنجاح! جاري الدخول...");
           } else {
-            setSuccessMsg("تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتأكيده قبل تسجيل الدخول.");
-            // إذا كان Supabase مضبوطاً على الدخول المباشر بدون تأكيد، سيعمل useEffect
+            setSuccessMsg("تم إنشاء الحساب! أرسلنا لك بريداً ترحيبياً، يرجى تفعيل الحساب قبل تسجيل الدخول.");
           }
         }
       }
@@ -138,9 +134,18 @@ const AuthPage: React.FC = () => {
             )}
 
             {successMsg && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-center flex flex-col items-center justify-center gap-2">
-                <CheckCircle2 size={24} className="text-emerald-500" />
-                <p className="text-emerald-400 text-[10px] font-bold uppercase">{successMsg}</p>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl text-center flex flex-col items-center justify-center gap-3 animate-fade-in">
+                <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500">
+                  <CheckCircle2 size={24} />
+                </div>
+                <div>
+                  <p className="text-emerald-400 text-[11px] font-black uppercase tracking-widest">{successMsg}</p>
+                  {!isLoginMode && (
+                    <p className="text-emerald-500/60 text-[9px] mt-1 font-bold flex items-center justify-center gap-1">
+                      <Send size={10} /> تم إرسال بريد الترحيب للعنوان المذكور
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

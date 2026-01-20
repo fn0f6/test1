@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { SupportTicket, NewsItem, UserProfile } from '../types';
 import { apiService } from '../services/api';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -36,7 +36,7 @@ interface SettingsContextType {
   updateUserRole: (id: string, role: 'admin' | 'user') => Promise<void>;
   isAdmin: boolean;
   login: (email: string, pass: string) => Promise<{ data: any; error: any }>;
-  signup: (email: string, pass: string) => Promise<{ data: any; error: any; message?: string }>;
+  signup: (email: string, pass: string) => Promise<{ data: any; error: any }>;
   logout: () => Promise<void>;
   lang: Language; setLang: (lang: Language) => void; t: any;
 }
@@ -69,91 +69,87 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
+  const isMounted = useRef(true);
 
   const fetchUserProfile = async (id: string, email: string) => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured || !isMounted.current) return;
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (data) {
+      if (data && isMounted.current) {
         setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
-      } else {
-        const isInitialAdmin = email.toLowerCase() === 'aaatay3@gmail.com';
-        setUser({ id, email, role: isInitialAdmin ? 'admin' : 'user' });
       }
     } catch (e) {
-      setUser({ id, email, role: 'user' });
+      console.error("Fetch profile failed", e);
     }
   };
 
   useEffect(() => {
-    const safetyTimer = setTimeout(() => { if (isLoading) setIsLoading(false); }, 10000);
+    isMounted.current = true;
     const init = async () => {
       try {
         if (isSupabaseConfigured) {
-          try {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) throw sessionError;
-            if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
-          } catch (authError) { console.warn("Supabase Auth session fetch failed:", authError); }
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user && isMounted.current) {
+            await fetchUserProfile(session.user.id, session.user.email!);
+          }
         }
-        const [s, n, t] = await Promise.all([ apiService.getSettings(), apiService.getNews(), apiService.getTickets() ]);
-        if (s) setSettings({ ...DEFAULT_SETTINGS, ...s });
-        setNews(n || []);
-        setTickets(t || []);
-      } catch (e: any) { console.error("Initialization Error:", e?.message || e); } 
-      finally { setIsLoading(false); clearTimeout(safetyTimer); }
+        const [s, n, t] = await Promise.all([apiService.getSettings(), apiService.getNews(), apiService.getTickets()]);
+        if (isMounted.current) {
+          if (s) setSettings(prev => ({ ...prev, ...s }));
+          setNews(n || []);
+          setTickets(t || []);
+          setIsLoading(false);
+        }
+      } catch (e) {
+        if (isMounted.current) setIsLoading(false);
+      }
     };
     init();
-    if (isSupabaseConfigured) {
-      const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
-        else setUser(null);
-      });
-      return () => { authListener.subscription.unsubscribe(); clearTimeout(safetyTimer); };
-    }
-    return () => clearTimeout(safetyTimer);
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted.current) return;
+      if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
+      else setUser(null);
+    });
+
+    return () => {
+      isMounted.current = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
-  const currentTranslations = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
+  const t = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
 
-  return (
-    <SettingsContext.Provider value={{ 
-      settings, tickets, news, isLoading, currentPage, navigateTo: (p) => { setCurrentPage(p); window.scrollTo(0, 0); },
-      user, isAdmin: user?.role === 'admin', lang, setLang, t: currentTranslations,
-      login: (email, pass) => isSupabaseConfigured ? supabase.auth.signInWithPassword({ email, password: pass }) : Promise.resolve({ data: {}, error: { message: "Supabase not configured" } }),
-      signup: async (email, pass) => {
-        if (!isSupabaseConfigured) return { data: {}, error: { message: "Supabase not configured" } };
-        
-        const displayName = email.split('@')[0];
-        const res = await supabase.auth.signUp({ 
-          email, password: pass,
-          options: { data: { display_name: displayName } }
-        });
-        
-        // إرسال بريد الترحيب في الخلفية لضمان عدم حدوث Abort للطلب الرئيسي
-        if (!res.error && (res.data.user || res.data.session)) {
-          apiService.sendWelcomeEmail(email, displayName).catch(err => console.error("Welcome email background fail:", err));
-        }
-        
-        return res;
-      },
-      logout: async () => { if (isSupabaseConfigured) await supabase.auth.signOut(); setUser(null); setCurrentPage('site'); },
-      updateSettings: async (ns) => { const updated = { ...settings, ...ns }; setSettings(updated); await apiService.updateSettings(updated); },
-      updateUserProfile: async (u) => { if(!user) return; const d = await apiService.updateProfile(user.id, u); setUser(prev => prev ? { ...prev, ...d } : null); },
-      getAllUsers: apiService.getAllProfiles,
-      updateUserRole: apiService.updateUserRole,
-      addTicket: async (tk) => { await apiService.submitTicket(tk); setTickets(await apiService.getTickets()); },
-      addNews: async (nw) => { await apiService.addNews(nw); setNews(await apiService.getNews()); },
-      deleteNews: async (id) => { await apiService.deleteNews(id); setNews(prev => prev.filter(n => n.id !== id)); },
-      deleteTicket: async (id) => { await apiService.deleteTicket(id); setTickets(prev => prev.filter(t => t.id !== id)); }
-    }}>
-      {children}
-    </SettingsContext.Provider>
-  );
+  const value = {
+    settings, tickets, news, isLoading, currentPage, 
+    navigateTo: (p: any) => { setCurrentPage(p); window.scrollTo(0, 0); },
+    user, isAdmin: user?.role === 'admin', lang, setLang, t,
+    login: (email: string, pass: string) => supabase.auth.signInWithPassword({ email, password: pass }),
+    signup: (email: string, pass: string) => supabase.auth.signUp({ email, password: pass }),
+    logout: async () => { await supabase.auth.signOut(); setUser(null); setCurrentPage('site'); },
+    updateSettings: async (ns: any) => { 
+      const updated = { ...settings, ...ns }; 
+      setSettings(updated); 
+      await apiService.updateSettings(updated); 
+    },
+    updateUserProfile: async (u: any) => {
+      if (!user) return;
+      const d = await apiService.updateProfile(user.id, u);
+      if (d) setUser(prev => prev ? { ...prev, ...d } : null);
+    },
+    getAllUsers: apiService.getAllProfiles,
+    updateUserRole: apiService.updateUserRole,
+    addTicket: async (tk: any) => { await apiService.submitTicket(tk); setTickets(await apiService.getTickets()); },
+    addNews: async (nw: any) => { await apiService.addNews(nw); setNews(await apiService.getNews()); },
+    deleteNews: async (id: string) => { await apiService.deleteNews(id); setNews(prev => prev.filter(n => n.id !== id)); },
+    deleteTicket: async (id: number) => { await apiService.deleteTicket(id); setTickets(prev => prev.filter(t => t.id !== id)); }
+  };
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 };
 
 export const useSettings = () => {
   const c = useContext(SettingsContext);
-  if (!c) throw new Error('useSettings error');
+  if (!c) throw new Error('useSettings must be used within SettingsProvider');
   return c;
 };

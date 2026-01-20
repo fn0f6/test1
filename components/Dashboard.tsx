@@ -9,7 +9,7 @@ import {
   Upload, Loader2, CheckCircle2, Save,
   Type as TypeIcon, Share2, 
   X, ArrowLeft, Image as ImageIcon,
-  User, Camera, ExternalLink, MessageCircle, Send, Youtube, Facebook, Music, Ghost, Users, Smartphone, Apple
+  User, Camera, ExternalLink, MessageCircle, Send, Youtube, Facebook, Music, Ghost, Users, Smartphone, Apple, ShieldAlert, ShieldUser
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -31,16 +31,46 @@ const Dashboard: React.FC = () => {
   
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  const refreshUsers = async () => {
+    if (isAdmin) {
+      const list = await getAllUsers();
+      setUsersList(list);
+    }
+  };
+
   useEffect(() => { 
     setLocalSettings(settings); 
     if (activeTab === 'users' && isAdmin) {
-      getAllUsers().then(setUsersList);
+      refreshUsers();
     }
   }, [settings, activeTab, isAdmin]);
 
   const triggerSuccess = () => {
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleUpdateRole = async (targetUserId: string, currentRole: string) => {
+    if (targetUserId === user?.id) {
+      alert("لا يمكنك تغيير رتبة نفسك!");
+      return;
+    }
+    
+    const newRole = currentRole === 'admin' ? 'user' : 'admin';
+    const confirmMsg = newRole === 'admin' ? "هل أنت متأكد من منح هذا المستخدم صلاحيات الأدمن كاملة؟" : "هل أنت متأكد من إزالة صلاحيات الأدمن؟";
+    
+    if (window.confirm(confirmMsg)) {
+      setIsSaving(true);
+      try {
+        await updateUserRole(targetUserId, newRole);
+        await refreshUsers();
+        triggerSuccess();
+      } catch (e) {
+        alert("فشل تحديث الرتبة");
+      } finally {
+        setIsSaving(false);
+      }
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string, isShowcase = false) => {
@@ -66,16 +96,6 @@ const Dashboard: React.FC = () => {
         alert("فشل الرفع: " + err.message);
       } finally { setIsSaving(false); }
     }
-  };
-
-  const handleSaveSocials = async () => {
-    setIsSaving(true);
-    try {
-      await updateSettings({ socialLinks: localSettings.socialLinks });
-      triggerSuccess();
-    } catch (e) {
-      alert("فشل الحفظ");
-    } finally { setIsSaving(false); }
   };
 
   const menuItems = isAdmin ? [
@@ -111,7 +131,7 @@ const Dashboard: React.FC = () => {
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-slate-500"><X size={24} /></button>
         </div>
 
-        <nav className="space-y-1 flex-1 overflow-y-auto">
+        <nav className="space-y-1 flex-1 overflow-y-auto custom-scrollbar">
           {menuItems.map(item => (
             <button 
               key={item.id} 
@@ -141,7 +161,54 @@ const Dashboard: React.FC = () => {
            </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-32">
+        <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-32 custom-scrollbar">
+          {activeTab === 'users' && isAdmin && (
+            <div className="max-w-5xl mx-auto space-y-6">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-2xl font-black text-white">إدارة الطاقم</h2>
+                  <p className="text-slate-500 text-xs">تحكم في رتب المستخدمين وصلاحيات الوصول</p>
+                </div>
+                <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl">
+                  <span className="text-xs text-slate-400">إجمالي البحارة: <b className="text-gold">{usersList.length}</b></span>
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                {usersList.map((u) => (
+                  <div key={u.id} className="glass-card p-6 rounded-[2rem] border-white/5 flex flex-col md:flex-row items-center gap-6 group hover:border-gold/20 transition-all">
+                    <div className="w-16 h-16 rounded-2xl bg-wood-900 border border-gold/10 overflow-hidden shrink-0">
+                      {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gold/20"><User size={24} /></div>}
+                    </div>
+                    
+                    <div className="flex-1 text-center md:text-right space-y-1">
+                      <div className="flex flex-col md:flex-row items-center gap-3">
+                        <p className="font-bold text-lg text-white">{u.display_name || 'بدون اسم'}</p>
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${u.role === 'admin' ? 'bg-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.3)]' : 'bg-white/5 text-slate-400'}`}>
+                          {u.role === 'admin' ? 'قبطان (أدمن)' : 'بحار (مستخدم)'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-mono">{u.email}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {u.id !== user?.id ? (
+                        <button 
+                          onClick={() => handleUpdateRole(u.id, u.role)}
+                          className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${u.role === 'admin' ? 'bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white' : 'bg-gold/10 text-gold hover:bg-gold hover:text-black'}`}
+                        >
+                          {u.role === 'admin' ? <><ShieldAlert size={14}/> تنزيل الرتبة</> : <><ShieldUser size={14}/> ترقية لأدمن</>}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase text-slate-600 bg-white/5 px-4 py-2 rounded-lg italic">أنت (القبطان الحالي)</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'profile' && (
             <div className="max-w-xl mx-auto space-y-10">
               <div className="text-center space-y-6">
@@ -166,93 +233,6 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'social' && isAdmin && (
-            <div className="max-w-4xl mx-auto space-y-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-black text-white">روابط التواصل</h2>
-                <button onClick={handleSaveSocials} className="bg-emerald-500 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2">
-                  <Save size={16} /> حفظ الروابط
-                </button>
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                {Object.keys(localSettings.socialLinks.activeLinks).map((platform) => (
-                  <div key={platform} className="glass-card p-6 rounded-2xl border-white/5 flex items-center gap-4">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[9px] font-black uppercase text-gold">{platform}</label>
-                        <input 
-                          type="checkbox" 
-                          checked={(localSettings.socialLinks.activeLinks as any)[platform]} 
-                          onChange={(e) => {
-                            const newActive = { ...localSettings.socialLinks.activeLinks, [platform]: e.target.checked };
-                            setLocalSettings({ ...localSettings, socialLinks: { ...localSettings.socialLinks, activeLinks: newActive } });
-                          }}
-                        />
-                      </div>
-                      <input 
-                        type="text" 
-                        value={(localSettings.socialLinks as any)[platform] || ''} 
-                        placeholder={`رابط ${platform}`}
-                        onChange={(e) => {
-                          const newLinks = { ...localSettings.socialLinks, [platform]: e.target.value };
-                          setLocalSettings({ ...localSettings, socialLinks: newLinks });
-                        }}
-                        className="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs text-white"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'system' && isAdmin && (
-            <div className="max-w-3xl mx-auto space-y-8">
-               <div className="glass-card p-8 rounded-3xl border-white/5 space-y-8">
-                  <h3 className="text-lg font-black text-white border-b border-white/5 pb-4">الإعدادات العامة</h3>
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-white/5">
-                      <div>
-                        <p className="text-xs font-black text-white">وضع الصيانة</p>
-                        <p className="text-[10px] text-slate-500">إغلاق الموقع للزوار العاديين</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          const newState = !localSettings.isMaintenanceMode;
-                          setLocalSettings({ ...localSettings, isMaintenanceMode: newState });
-                          updateSettings({ isMaintenanceMode: newState });
-                          triggerSuccess();
-                        }}
-                        className={`w-14 h-8 rounded-full transition-all relative ${localSettings.isMaintenanceMode ? 'bg-red-500' : 'bg-slate-700'}`}
-                      >
-                        <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${localSettings.isMaintenanceMode ? 'right-7' : 'right-1'}`}></div>
-                      </button>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black uppercase text-slate-500">عنوان الموقع</label>
-                      <input type="text" value={localSettings.siteTitle} onChange={e => setLocalSettings({...localSettings, siteTitle: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-sm" />
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-6">
-                       <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase text-slate-500 flex items-center gap-2"><Smartphone size={12}/> Android URL</label>
-                        <input type="text" value={localSettings.androidUrl} onChange={e => setLocalSettings({...localSettings, androidUrl: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-xs" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase text-slate-500 flex items-center gap-2"><Apple size={12}/> iOS URL</label>
-                        <input type="text" value={localSettings.iosUrl} onChange={e => setLocalSettings({...localSettings, iosUrl: e.target.value})} className="w-full bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-white text-xs" />
-                      </div>
-                    </div>
-
-                    <button onClick={async () => { setIsSaving(true); try { await updateSettings(localSettings); triggerSuccess(); } finally { setIsSaving(false); } }} className="w-full py-4 bg-emerald-500 text-white font-black uppercase rounded-xl flex items-center justify-center gap-2 mt-4">
-                      <Save size={18} /> حفظ إعدادات النظام
-                    </button>
-                  </div>
-               </div>
-            </div>
-          )}
-
           {activeTab === 'stats' && isAdmin && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
               <div className="glass-card p-8 rounded-3xl border-white/5">
@@ -264,16 +244,13 @@ const Dashboard: React.FC = () => {
                 <p className="text-5xl font-display font-black text-emerald-500">{tickets.length}</p>
               </div>
               <div className="glass-card p-8 rounded-3xl border-white/5">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">حالة الخادم</p>
-                <div className="flex items-center gap-3 mt-4">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
-                  <p className="text-emerald-500 font-bold">متصل ومستقر</p>
-                </div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">الطاقم</p>
+                <p className="text-5xl font-display font-black text-sky-400">{usersList.length}</p>
               </div>
             </div>
           )}
-          
-          {/* محتوى افتراضي لمنع الفراغ في البداية */}
+
+          {/* تبويبات أخرى ... */}
           {activeTab === 'inbox' && isAdmin && (
              <div className="space-y-6">
                 {tickets.length === 0 ? (

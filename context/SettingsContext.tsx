@@ -75,76 +75,74 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!isSupabaseConfigured || !isMounted.current) return;
     setUser({ id, email, role: 'user' });
     try {
-      let attempts = 0;
-      let userData = null;
-      while (attempts < 3 && !userData && isMounted.current) {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-        if (data) { userData = data; break; }
-        attempts++;
-        if (!userData && attempts < 3) await new Promise(r => setTimeout(r, 1000));
+      const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+      if (data && isMounted.current) {
+        setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
       }
-      if (userData && isMounted.current) {
-        setUser({ id, email, role: userData.role as 'admin' | 'user', display_name: userData.display_name, avatar_url: userData.avatar_url });
-      }
-    } catch (e) { console.warn("Profile fetch skipped or aborted"); }
+    } catch (e) { console.warn("Profile fetch error", e); }
   };
 
   useEffect(() => {
     isMounted.current = true;
     const startTime = Date.now();
     
+    // Safety Force Start: إذا لم ينتهِ التحميل خلال 5 ثوانٍ، سنفتحه إجبارياً
+    const forceStart = setTimeout(() => {
+      if (isMounted.current && isLoading) {
+        console.warn("API load taking too long, forcing start...");
+        setIsLoading(false);
+      }
+    }, 5000);
+
     const init = async () => {
       try {
         if (isSupabaseConfigured) {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
           if (session?.user && isMounted.current) {
             await fetchUserProfile(session.user.id, session.user.email!);
           }
         }
         
-        const [settingsResult, newsResult, ticketsResult] = await Promise.allSettled([
+        const results = await Promise.allSettled([
           apiService.getSettings(),
           apiService.getNews(),
           apiService.getTickets()
         ]);
 
         if (isMounted.current) {
-          if (settingsResult.status === 'fulfilled' && settingsResult.value) {
-            setSettings(prev => ({ ...prev, ...settingsResult.value }));
-          }
-          if (newsResult.status === 'fulfilled') {
-            setNews(newsResult.value || []);
-          }
-          if (ticketsResult.status === 'fulfilled') {
-            setTickets(ticketsResult.value || []);
-          }
+          const [sRes, nRes, tRes] = results;
+          if (sRes.status === 'fulfilled' && sRes.value) setSettings(prev => ({ ...prev, ...sRes.value }));
+          if (nRes.status === 'fulfilled') setNews(nRes.value || []);
+          if (tRes.status === 'fulfilled') setTickets(tRes.value || []);
           
-          // ضمان بقاء شاشة التحميل لمدة لا تقل عن 2000ms
-          const elapsedTime = Date.now() - startTime;
-          const remainingTime = Math.max(0, 2000 - elapsedTime);
-          
+          const remainingTime = Math.max(0, 1500 - (Date.now() - startTime));
           setTimeout(() => {
-            if (isMounted.current) setIsLoading(false);
+            if (isMounted.current) {
+              setIsLoading(false);
+              clearTimeout(forceStart);
+            }
           }, remainingTime);
         }
       } catch (e) {
-        if (isMounted.current) setIsLoading(false);
+        console.error("Initialization error", e);
+        if (isMounted.current) {
+          setIsLoading(false);
+          clearTimeout(forceStart);
+        }
       }
     };
     init();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted.current) return;
-      if (session?.user) {
-        await fetchUserProfile(session.user.id, session.user.email!);
-      } else {
-        setUser(null);
-      }
+      if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
+      else setUser(null);
     });
 
     return () => {
       isMounted.current = false;
       authListener.subscription.unsubscribe();
+      clearTimeout(forceStart);
     };
   }, []);
 

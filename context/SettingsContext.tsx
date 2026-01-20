@@ -1,164 +1,267 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { SupportTicket, NewsItem, UserProfile } from '../types';
-import { apiService } from '../services/api';
-import { supabase } from '../services/supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { NewsItem, SupportTicket, UserProfile } from '../types';
 
-export type Language = 'en' | 'ar';
+// --- MOCK DATA FOR OFFLINE MODE ---
+const MOCK_NEWS: NewsItem[] = [
+  { id: '1', title: 'Welcome to the Fleet', excerpt: 'The dashboard is running in demo mode. Configure Supabase to see real data.', category: 'System', date: new Date().toLocaleDateString('en-US'), thumbnailUrl: 'https://images.unsplash.com/photo-1596529896791-537449298538' },
+  { id: '2', title: 'Storm Ahead', excerpt: 'Prepare the ships for a heavy storm approaching from the north.', category: 'Weather', date: new Date().toLocaleDateString('en-US'), thumbnailUrl: 'https://images.unsplash.com/photo-1500043204644-768d20653f32' }
+];
 
-export interface SocialLinks {
-  showSocials: boolean; whatsapp: string; whatsappGroup: string; telegram: string; discord: string;
-  instagram: string; twitter: string; youtube: string; facebook: string; tiktok: string; snapchat: string;
-  activeLinks: {
-    whatsapp: boolean; whatsappGroup: boolean; telegram: boolean; discord: boolean; instagram: boolean;
-    twitter: boolean; youtube: boolean; facebook: boolean; tiktok: boolean; snapchat: boolean;
-  };
-}
+const MOCK_TICKETS: SupportTicket[] = [
+  { id: 1, name: 'Jack', email: 'jack@pirate.com', subject: 'Login Issue', message: 'Cannot access my quarters.', createdAt: new Date().toISOString() }
+];
 
-export interface SiteSettings {
-  logoUrl: string; heroBgUrl: string; siteBgColor: string; primaryColor: string; secondaryColor: string;
-  siteTitle: string; androidUrl: string; iosUrl: string; isMaintenanceMode: boolean; maintenanceMessage: string;
-  qrData: string; customQrUrl: string;
-  showcaseImages: { map: string; rank: string; tasks: string; chat: string; store: string; warehouse: string; };
-  translations: Record<Language, any>;
-  socialLinks: SocialLinks;
-}
+const MOCK_PROFILES: UserProfile[] = [
+  { id: 'mock-admin', email: 'admin@fleet.com', role: 'admin', display_name: 'Fleet Admiral', avatar_url: '' },
+  { id: 'mock-user', email: 'crew@fleet.com', role: 'user', display_name: 'Deck Hand', avatar_url: '' }
+];
 
-interface SettingsContextType {
-  settings: SiteSettings; updateSettings: (newSettings: Partial<SiteSettings>) => Promise<void>;
-  tickets: SupportTicket[]; news: NewsItem[];
-  addTicket: (ticket: any) => Promise<void>; addNews: (news: any) => Promise<void>;
-  deleteNews: (id: string) => Promise<void>; deleteTicket: (id: number) => Promise<void>;
-  isLoading: boolean; currentPage: 'site' | 'admin' | 'login'; navigateTo: (page: 'site' | 'admin' | 'login') => void;
-  user: UserProfile | null;
-  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
-  getAllUsers: () => Promise<UserProfile[]>;
-  updateUserRole: (id: string, role: 'admin' | 'user') => Promise<void>;
-  isAdmin: boolean;
-  login: (email: string, pass: string) => Promise<{ data: any; error: any }>;
-  signup: (email: string, pass: string) => Promise<{ data: any; error: any; message?: string }>;
-  logout: () => Promise<void>;
-  lang: Language; setLang: (lang: Language) => void; t: any;
-}
+// Helper to simulate network delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+export const apiService = {
+  // --- إعدادات الموقع ---
+  getSettings: async () => {
+    if (!isSupabaseConfigured) return null;
 
-const DEFAULT_TRANSLATIONS = { 
-  en: { navHome: 'Home', navNews: 'News', navShowcase: 'Features', navDownloads: 'Downloads', navSupport: 'Support', heroHeadline: 'Rule the Seas', heroSubheadline: 'Your adventure starts here.', heroBtnDownload: 'Get App', heroBtnLogs: 'Logs', newsTitle: 'News', newsSub: 'Latest', newsBtnRead: 'Read', showcaseTitle: 'Showcase', showcaseSub: 'Game', featMap: 'Map', featMapDesc: 'Explore', featRank: 'Rank', featRankDesc: 'Compete', featTasks: 'Tasks', featTasksDesc: 'Quests', featChat: 'Chat', featChatDesc: 'Connect', featStore: 'Store', featStoreDesc: 'Trade', featWarehouse: 'Safe', featWarehouseDesc: 'Secure', downloadTitle: 'Download', downloadSub: 'Now', downloadQuickDeploy: 'QR', downloadQuickDeploySub: 'Scan', supportTitle: 'Support', supportSub: 'Contact', supportBtnSend: 'Send', footerDesc: 'Asr Al Hamour', storeAppStore: 'App Store', storeGooglePlay: 'Google Play', storeBadge: 'Official' },
-  ar: { navHome: 'الرئيسية', navNews: 'الأخبار', navShowcase: 'المميزات', navDownloads: 'التحميل', navSupport: 'الدعم', heroHeadline: 'سيطر على البحار', heroSubheadline: 'مغامرتك تبدأ من هنا.', heroBtnDownload: 'تحميل', heroBtnLogs: 'السجلات', newsTitle: 'الأخبار', newsSub: 'الأحدث', newsBtnRead: 'اقرأ', showcaseTitle: 'العرض', showcaseSub: 'اللعبة', featMap: 'خريطة', featMapDesc: 'استكشف', featRank: 'ترتيب', featRankDesc: 'نافس', featTasks: 'مهام', featTasksDesc: 'يومية', featChat: 'دردشة', featChatDesc: 'تواصل', featStore: 'متجر', featStoreDesc: 'تاجر', featWarehouse: 'خزنة', featWarehouseDesc: 'أمّن', downloadTitle: 'تحميل', downloadSub: 'الآن', downloadQuickDeploy: 'QR', downloadQuickDeploySub: 'امسح', supportTitle: 'الدعم', supportSub: 'اتصل', supportBtnSend: 'إرسال', footerDesc: 'عصر الهامور', storeAppStore: 'App Store', storeGooglePlay: 'Google Play', storeBadge: 'رسمي' }
-};
-
-const DEFAULT_SETTINGS: SiteSettings = {
-  logoUrl: 'assets/asr_alhamour_logo_text.png', heroBgUrl: 'assets/island_skull_sunset.png', siteBgColor: '#050505',
-  primaryColor: '#10b981', secondaryColor: '#b45309', siteTitle: 'عصر الهامور',
-  androidUrl: '#', iosUrl: '#', isMaintenanceMode: false, maintenanceMessage: 'الأسطول في مهمة صيانة سريعة، سنعود قريباً!',
-  qrData: '', customQrUrl: '',
-  showcaseImages: { map: 'assets/old_map_texture.png', rank: 'assets/swords_crossed.png', tasks: 'assets/scroll_paper.png', chat: 'assets/chat_bubble.png', store: 'assets/fish_market_isometric.png', warehouse: 'assets/house_isometric.png' },
-  translations: DEFAULT_TRANSLATIONS,
-  socialLinks: {
-    showSocials: true, whatsapp: '', whatsappGroup: '', telegram: '', discord: '', instagram: '', twitter: '', youtube: '', facebook: '', tiktok: '', snapchat: '',
-    activeLinks: { whatsapp: true, whatsappGroup: true, telegram: true, discord: true, instagram: true, twitter: true, youtube: true, facebook: true, tiktok: true, snapchat: true }
-  }
-};
-
-export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentPage, setCurrentPage] = useState<'site' | 'admin' | 'login'>('site');
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [lang, setLang] = useState<Language>('ar');
-  const [isLoading, setIsLoading] = useState(true);
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [news, setNews] = useState<NewsItem[]>([]);
-
-  const fetchUserProfile = async (id: string, email: string) => {
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (data) {
-        setUser({ id, email, role: data.role as 'admin' | 'user', display_name: data.display_name, avatar_url: data.avatar_url });
-      } else {
-        const isInitialAdmin = email.toLowerCase() === 'aaatay3@gmail.com';
-        setUser({ id, email, role: isInitialAdmin ? 'admin' : 'user' });
-      }
-    } catch (e) {
-      setUser({ id, email, role: 'user' });
+      const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
+      if (error) throw error;
+      
+      if (!data) return null;
+
+      return {
+        logoUrl: data.logo_url,
+        heroBgUrl: data.hero_bg_url,
+        siteTitle: data.site_title,
+        androidUrl: data.android_url,
+        iosUrl: data.ios_url,
+        isMaintenanceMode: !!data.is_maintenance_mode,
+        maintenanceMessage: data.maintenance_message,
+        showcaseImages: data.showcase_images || {},
+        translations: data.translations || {},
+        socialLinks: data.social_links || {},
+        qrData: data.qr_data || '',
+        customQrUrl: data.custom_qr_url || ''
+      };
+    } catch (e: any) {
+      console.warn("Settings API Error (using defaults):", e?.message || e);
+      return null;
     }
-  };
+  },
 
-  useEffect(() => {
-    const safetyTimer = setTimeout(() => { if (isLoading) setIsLoading(false); }, 10000);
+  updateSettings: async (settings: any) => {
+    if (!isSupabaseConfigured) {
+      await delay(300);
+      return;
+    }
 
-    const init = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
+    try {
+      const dbPayload = {
+        id: 1,
+        logo_url: settings.logoUrl,
+        hero_bg_url: settings.heroBgUrl,
+        site_title: settings.siteTitle,
+        android_url: settings.androidUrl,
+        ios_url: settings.iosUrl,
+        is_maintenance_mode: settings.isMaintenanceMode,
+        maintenance_message: settings.maintenanceMessage,
+        showcase_images: settings.showcaseImages,
+        translations: settings.translations,
+        social_links: settings.socialLinks,
+        qr_data: settings.qrData,
+        custom_qr_url: settings.customQrUrl,
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase.from('settings').upsert(dbPayload);
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to update settings:", e);
+      throw e;
+    }
+  },
+
+  // --- الأخبار ---
+  getNews: async () => {
+    if (!isSupabaseConfigured) {
+      return MOCK_NEWS;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('news')
+        .select('*')
+        .order('created_at', { ascending: false });
         
-        const [s, n, t] = await Promise.all([
-          apiService.getSettings(),
-          apiService.getNews(),
-          apiService.getTickets()
-        ]);
+      if (error) throw error;
+      
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        excerpt: item.excerpt,
+        thumbnailUrl: item.thumbnail_url,
+        category: item.category,
+        date: item.date
+      })) as NewsItem[];
+    } catch (error: any) {
+      console.warn("Supabase fetch news failed, falling back to mocks:", error?.message || error);
+      return MOCK_NEWS;
+    }
+  },
 
-        if (s) setSettings({ ...DEFAULT_SETTINGS, ...s });
-        setNews(n || []);
-        setTickets(t || []);
-      } catch (e: any) {
-        console.error("Initialization Error:", e);
-      } finally {
-        setIsLoading(false);
-        clearTimeout(safetyTimer);
-      }
-    };
+  addNews: async (news: any) => {
+    if (!isSupabaseConfigured) {
+      MOCK_NEWS.unshift({ ...news, id: Date.now().toString(), date: new Date().toLocaleDateString() });
+      return;
+    }
 
-    init();
+    const { error } = await supabase.from('news').insert([{
+      title: news.title,
+      excerpt: news.excerpt,
+      thumbnail_url: news.thumbnailUrl,
+      category: news.category,
+      date: new Date().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' }),
+      created_at: new Date().toISOString()
+    }]);
+    if (error) throw error;
+  },
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
-      else setUser(null);
-    });
+  deleteNews: async (id: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from('news').delete().eq('id', id);
+    if (error) throw error;
+  },
 
-    return () => {
-      authListener.subscription.unsubscribe();
-      clearTimeout(safetyTimer);
-    };
-  }, []);
+  // --- تذاكر الدعم ---
+  getTickets: async () => {
+    if (!isSupabaseConfigured) return MOCK_TICKETS;
 
-  const currentTranslations = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      
+      return (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        subject: item.subject,
+        message: item.message,
+        createdAt: item.created_at
+      })) as SupportTicket[];
+    } catch (error) {
+      return MOCK_TICKETS;
+    }
+  },
 
-  return (
-    <SettingsContext.Provider value={{ 
-      settings, tickets, news, isLoading, currentPage, navigateTo: (p) => { setCurrentPage(p); window.scrollTo(0, 0); },
-      user, isAdmin: user?.role === 'admin', lang, setLang, t: currentTranslations,
-      login: (email, pass) => supabase.auth.signInWithPassword({ email, password: pass }),
-      signup: (email, pass) => supabase.auth.signUp({ 
-        email, 
-        password: pass,
-        options: { data: { display_name: email.split('@')[0] } }
-      }),
-      logout: async () => { await supabase.auth.signOut(); setUser(null); setCurrentPage('site'); },
-      updateSettings: async (ns) => { 
-        const updated = { ...settings, ...ns }; 
-        setSettings(updated); 
-        await apiService.updateSettings(updated); 
-      },
-      updateUserProfile: async (u) => { 
-        if(!user) return; 
-        const d = await apiService.updateProfile(user.id, u); 
-        setUser(prev => prev ? { ...prev, ...d } : null); 
-      },
-      getAllUsers: apiService.getAllProfiles,
-      updateUserRole: apiService.updateUserRole,
-      addTicket: async (tk) => { await apiService.submitTicket(tk); setTickets(await apiService.getTickets()); },
-      addNews: async (nw) => { await apiService.addNews(nw); setNews(await apiService.getNews()); },
-      deleteNews: async (id) => { await apiService.deleteNews(id); setNews(prev => prev.filter(n => n.id !== id)); },
-      deleteTicket: async (id) => { await apiService.deleteTicket(id); setTickets(prev => prev.filter(t => t.id !== id)); }
-    }}>
-      {children}
-    </SettingsContext.Provider>
-  );
-};
+  submitTicket: async (ticket: any) => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+    const { error } = await supabase.from('tickets').insert([{
+      name: ticket.name,
+      email: ticket.email,
+      subject: ticket.subject,
+      message: ticket.message,
+      created_at: new Date().toISOString()
+    }]);
+    if (error) throw error;
+  },
 
-export const useSettings = () => {
-  const c = useContext(SettingsContext);
-  if (!c) throw new Error('useSettings error');
-  return c;
+  deleteTicket: async (id: number) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from('tickets').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  // --- المستخدمين والبروفايل ---
+  getAllProfiles: async () => {
+    if (!isSupabaseConfigured) return MOCK_PROFILES;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (e) {
+      return MOCK_PROFILES;
+    }
+  },
+
+  updateUserRole: async (id: string, role: string) => {
+    if (!isSupabaseConfigured) return;
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+    if (error) throw error;
+  },
+
+  updateProfile: async (id: string, updates: any) => {
+    if (!isSupabaseConfigured) {
+      return { ...MOCK_PROFILES[0], ...updates };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      try {
+        if (updates.display_name || updates.avatar_url) {
+            await supabase.auth.updateUser({
+                data: {
+                    display_name: updates.display_name,
+                    avatar_url: updates.avatar_url
+                }
+            });
+        }
+      } catch (e) {}
+
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // --- رفع الملفات ---
+  uploadImage: async (file: File, bucketName: string) => {
+    if (!isSupabaseConfigured) {
+      return URL.createObjectURL(file);
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const randomId = Math.random().toString(36).substring(2, 10);
+      const fileName = `${Date.now()}_${randomId}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { data, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (err: any) {
+      console.error("Upload Error:", err.message);
+      throw new Error(`فشل رفع الصورة: ${err.message}`);
+    }
+  }
 };

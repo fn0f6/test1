@@ -14,7 +14,7 @@ export interface SupportTicket {
   email: string;
   subject: string;
   message: string;
-  createdAt: string; // Changed from number to string to match Supabase/ISO format
+  createdAt: string;
 }
 
 export interface UserProfile {
@@ -23,6 +23,7 @@ export interface UserProfile {
   role: 'admin' | 'user';
   display_name?: string;
   avatar_url?: string;
+  created_at?: string;
 }
 
 export enum LoadingState {

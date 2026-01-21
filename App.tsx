@@ -46,10 +46,18 @@ const MaintenanceScreen = () => {
 };
 
 function AppContent() {
-  const { currentPage, settings, user, isAdmin, isLoading } = useSettings();
+  const { currentPage, settings, user, isAdmin, isLoading, navigateTo } = useSettings();
+
+  // توجيه تلقائي: إذا كان المستخدم مسجلاً وهو في صفحة الدخول، انقله للمكان المناسب
+  useEffect(() => {
+    if (user && currentPage === 'login') {
+      navigateTo(isAdmin ? 'admin' : 'site');
+    }
+  }, [user, currentPage, isAdmin, navigateTo]);
 
   if (isLoading) return <LoadingScreen />;
 
+  // إذا كان المستخدم يحاول الوصول لصفحة الدخول وهو مسجل بالفعل، لا تظهرها له
   if (currentPage === 'login' && !user) {
     return (
       <Suspense fallback={<LoadingScreen />}>

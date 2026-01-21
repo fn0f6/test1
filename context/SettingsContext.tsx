@@ -43,6 +43,8 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+const MASTER_ADMIN_EMAIL = 'aaatay3@gmail.com';
+
 const DEFAULT_TRANSLATIONS = { 
   en: { navHome: 'Home', navNews: 'News', navShowcase: 'Features', navDownloads: 'Downloads', navSupport: 'Support', heroHeadline: 'Rule the Seas', heroSubheadline: 'Your adventure starts here.', heroBtnDownload: 'Get App', heroBtnLogs: 'Logs', newsTitle: 'News', newsSub: 'Latest', newsBtnRead: 'Read', showcaseTitle: 'Showcase', showcaseSub: 'Game', featMap: 'Map', featMapDesc: 'Explore', featRank: 'Rank', featRankDesc: 'Compete', featTasks: 'Tasks', featTasksDesc: 'Quests', featChat: 'Chat', featChatDesc: 'Connect', featStore: 'Store', featStoreDesc: 'Trade', featWarehouse: 'Safe', featWarehouseDesc: 'Secure', downloadTitle: 'Download', downloadSub: 'Now', downloadQuickDeploy: 'QR', downloadQuickDeploySub: 'Scan', supportTitle: 'Support', supportSub: 'Contact', supportBtnSend: 'Send', footerDesc: 'Asr Al Hamour', storeAppStore: 'App Store', storeGooglePlay: 'Google Play', storeBadge: 'Official' },
   ar: { navHome: 'الرئيسية', navNews: 'الأخبار', navShowcase: 'المميزات', navDownloads: 'التحميل', navSupport: 'الدعم', heroHeadline: 'سيطر على البحار', heroSubheadline: 'مغامرتك تبدأ من هنا.', heroBtnDownload: 'تحميل', heroBtnLogs: 'السجلات', newsTitle: 'الأخبار', newsSub: 'الأحدث', newsBtnRead: 'اقرأ', showcaseTitle: 'العرض', showcaseSub: 'اللعبة', featMap: 'خريطة', featMapDesc: 'استكشف', featRank: 'ترتيب', featRankDesc: 'نافس', featTasks: 'مهام', featTasksDesc: 'يومية', featChat: 'دردشة', featChatDesc: 'تواصل', featStore: 'متجر', featStoreDesc: 'تاجر', featWarehouse: 'خزنة', featWarehouseDesc: 'أمّن', downloadTitle: 'تحميل', downloadSub: 'الآن', downloadQuickDeploy: 'QR', downloadQuickDeploySub: 'امسح', supportTitle: 'الدعم', supportSub: 'اتصل', supportBtnSend: 'إرسال', footerDesc: 'عصر الهامور', storeAppStore: 'App Store', storeGooglePlay: 'Google Play', storeBadge: 'رسمي' }
@@ -61,9 +63,6 @@ const DEFAULT_SETTINGS: SiteSettings = {
   }
 };
 
-// البريد الإلكتروني الرئيسي للأدمن (لضمان الدخول دائماً)
-const MASTER_ADMIN_EMAIL = 'aaatay3@gmail.com';
-
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentPage, setCurrentPage] = useState<'site' | 'admin' | 'login'>('site');
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -77,84 +76,58 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const fetchUserProfile = async (id: string, email: string) => {
     if (!isSupabaseConfigured || !isMounted.current) return;
     
-    // إعداد أولي
-    let role: 'admin' | 'user' = 'user';
-    // Master Admin Override: إذا كان البريد هو البريد الرئيسي، اجعله أدمن فوراً
-    if (email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) {
-      role = 'admin';
-    }
-
-    setUser({ id, email, role });
+    // Master Admin logic: force admin role for this email regardless of DB state
+    const isMaster = email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
     
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
-      if (data && isMounted.current) {
-        let dbRole = data.role as 'admin' | 'user';
+      if (isMounted.current) {
+        let finalRole: 'admin' | 'user' = (data?.role as any) || (isMaster ? 'admin' : 'user');
         
-        // إذا كان المستخدم هو الماستر أدمن ولكن القاعدة تقول user، نقوم بالتصحيح التلقائي
-        if (email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase() && dbRole !== 'admin') {
-           console.log("Auto-correcting master admin role...");
-           await supabase.from('profiles').update({ role: 'admin' }).eq('id', id);
-           dbRole = 'admin';
+        // Auto-correct if master email is labeled as user in DB
+        if (isMaster && finalRole !== 'admin') {
+          finalRole = 'admin';
+          await supabase.from('profiles').update({ role: 'admin' }).eq('id', id);
         }
 
         setUser({ 
           id, 
           email, 
-          role: dbRole, 
-          display_name: data.display_name, 
-          avatar_url: data.avatar_url 
+          role: finalRole, 
+          display_name: data?.display_name || email.split('@')[0], 
+          avatar_url: data?.avatar_url 
         });
       }
-    } catch (e) { console.warn("Profile fetch error", e); }
+    } catch (e) {
+      if (isMaster) setUser({ id, email, role: 'admin' });
+    }
   };
 
   useEffect(() => {
     isMounted.current = true;
-    const startTime = Date.now();
-    
-    const forceStart = setTimeout(() => {
-      if (isMounted.current && isLoading) {
-        console.warn("API load taking too long, forcing start...");
-        setIsLoading(false);
-      }
-    }, 5000);
-
     const init = async () => {
       try {
         if (isSupabaseConfigured) {
-          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          const { data: { session } } = await supabase.auth.getSession();
           if (session?.user && isMounted.current) {
             await fetchUserProfile(session.user.id, session.user.email!);
           }
         }
         
-        const results = await Promise.allSettled([
+        const [sRes, nRes, tRes] = await Promise.allSettled([
           apiService.getSettings(),
           apiService.getNews(),
           apiService.getTickets()
         ]);
 
         if (isMounted.current) {
-          const [sRes, nRes, tRes] = results;
           if (sRes.status === 'fulfilled' && sRes.value) setSettings(prev => ({ ...prev, ...sRes.value }));
           if (nRes.status === 'fulfilled') setNews(nRes.value || []);
           if (tRes.status === 'fulfilled') setTickets(tRes.value || []);
-          
-          const remainingTime = Math.max(0, 1500 - (Date.now() - startTime));
-          setTimeout(() => {
-            if (isMounted.current) {
-              setIsLoading(false);
-              clearTimeout(forceStart);
-            }
-          }, remainingTime);
+          setIsLoading(false);
         }
       } catch (e) {
-        console.error("Initialization error", e);
-        if (isMounted.current) {
-          setIsLoading(false);
-          clearTimeout(forceStart);
-        }
+        if (isMounted.current) setIsLoading(false);
       }
     };
     init();
@@ -165,19 +138,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       else setUser(null);
     });
 
-    return () => {
-      isMounted.current = false;
-      authListener.subscription.unsubscribe();
-      clearTimeout(forceStart);
-    };
+    return () => { isMounted.current = false; authListener.subscription.unsubscribe(); };
   }, []);
 
   const t = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
+  
+  // isAdmin logic: Check both the role property AND the master email for 100% certainty
+  const isAdmin = useMemo(() => {
+    if (!user) return false;
+    return user.role === 'admin' || user.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+  }, [user]);
 
   const value = {
     settings, tickets, news, isLoading, currentPage, 
     navigateTo: (p: any) => { setCurrentPage(p); window.scrollTo(0, 0); },
-    user, isAdmin: user?.role === 'admin', lang, setLang, t,
+    user, isAdmin, lang, setLang, t,
     login: (email: string, pass: string) => supabase.auth.signInWithPassword({ email, password: pass }),
     signup: (email: string, pass: string) => supabase.auth.signUp({ email, password: pass }),
     logout: async () => { await supabase.auth.signOut(); setUser(null); setCurrentPage('site'); },

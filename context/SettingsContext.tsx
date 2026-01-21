@@ -76,7 +76,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const fetchUserProfile = async (id: string, email: string) => {
     if (!isSupabaseConfigured || !isMounted.current) return;
     
-    // Master Admin logic: force admin role for this email regardless of DB state
     const isMaster = email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
     
     try {
@@ -84,7 +83,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (isMounted.current) {
         let finalRole: 'admin' | 'user' = (data?.role as any) || (isMaster ? 'admin' : 'user');
         
-        // Auto-correct if master email is labeled as user in DB
         if (isMaster && finalRole !== 'admin') {
           finalRole = 'admin';
           await supabase.from('profiles').update({ role: 'admin' }).eq('id', id);
@@ -105,6 +103,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     isMounted.current = true;
+
+    // مهلة أمان لضمان إخفاء شاشة التحميل مهما حدث
+    const safetyTimeout = setTimeout(() => {
+        if (isMounted.current && isLoading) {
+            console.warn("Safety timeout: Forcing app start");
+            setIsLoading(false);
+        }
+    }, 4000);
+
     const init = async () => {
       try {
         if (isSupabaseConfigured) {
@@ -125,25 +132,35 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (nRes.status === 'fulfilled') setNews(nRes.value || []);
           if (tRes.status === 'fulfilled') setTickets(tRes.value || []);
           setIsLoading(false);
+          clearTimeout(safetyTimeout);
         }
       } catch (e) {
-        if (isMounted.current) setIsLoading(false);
+        if (isMounted.current) {
+            setIsLoading(false);
+            clearTimeout(safetyTimeout);
+        }
       }
     };
     init();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted.current) return;
-      if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
-      else setUser(null);
+      if (session?.user) {
+          await fetchUserProfile(session.user.id, session.user.email!);
+      } else {
+          setUser(null);
+      }
     });
 
-    return () => { isMounted.current = false; authListener.subscription.unsubscribe(); };
+    return () => { 
+        isMounted.current = false; 
+        authListener.subscription.unsubscribe();
+        clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const t = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
   
-  // isAdmin logic: Check both the role property AND the master email for 100% certainty
   const isAdmin = useMemo(() => {
     if (!user) return false;
     return user.role === 'admin' || user.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();

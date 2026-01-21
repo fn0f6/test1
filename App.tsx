@@ -46,13 +46,7 @@ const MaintenanceScreen = () => {
 };
 
 function AppContent() {
-  const { currentPage, settings, user, isAdmin, isLoading, navigateTo } = useSettings();
-
-  useEffect(() => {
-    if (currentPage === 'login' && user) {
-      navigateTo('site');
-    }
-  }, [currentPage, user, navigateTo]);
+  const { currentPage, settings, user, isAdmin, isLoading } = useSettings();
 
   if (isLoading) return <LoadingScreen />;
 

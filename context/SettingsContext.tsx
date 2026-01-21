@@ -75,7 +75,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchUserProfile = async (id: string, email: string) => {
     if (!isSupabaseConfigured || !isMounted.current) return;
-    
     const isMaster = email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
     
     try {
@@ -89,11 +88,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
 
         setUser({ 
-          id, 
-          email, 
+          id, email, 
           role: finalRole, 
           display_name: data?.display_name || email.split('@')[0], 
-          avatar_url: data?.avatar_url 
+          avatar_url: data?.avatar_url,
+          created_at: data?.created_at
         });
       }
     } catch (e) {
@@ -103,29 +102,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     isMounted.current = true;
-
-    // مهلة أمان لضمان إخفاء شاشة التحميل مهما حدث
-    const safetyTimeout = setTimeout(() => {
-        if (isMounted.current && isLoading) {
-            console.warn("Safety timeout: Forcing app start");
-            setIsLoading(false);
-        }
-    }, 4000);
+    const safetyTimeout = setTimeout(() => { if (isMounted.current && isLoading) setIsLoading(false); }, 4000);
 
     const init = async () => {
       try {
         if (isSupabaseConfigured) {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user && isMounted.current) {
-            await fetchUserProfile(session.user.id, session.user.email!);
-          }
+          if (session?.user) await fetchUserProfile(session.user.id, session.user.email!);
         }
         
-        const [sRes, nRes, tRes] = await Promise.allSettled([
-          apiService.getSettings(),
-          apiService.getNews(),
-          apiService.getTickets()
-        ]);
+        const [sRes, nRes, tRes] = await Promise.allSettled([apiService.getSettings(), apiService.getNews(), apiService.getTickets()]);
 
         if (isMounted.current) {
           if (sRes.status === 'fulfilled' && sRes.value) setSettings(prev => ({ ...prev, ...sRes.value }));
@@ -135,10 +121,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           clearTimeout(safetyTimeout);
         }
       } catch (e) {
-        if (isMounted.current) {
-            setIsLoading(false);
-            clearTimeout(safetyTimeout);
-        }
+        if (isMounted.current) { setIsLoading(false); clearTimeout(safetyTimeout); }
       }
     };
     init();
@@ -152,15 +135,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
 
-    return () => { 
-        isMounted.current = false; 
-        authListener.subscription.unsubscribe();
-        clearTimeout(safetyTimeout);
-    };
+    return () => { isMounted.current = false; authListener.subscription.unsubscribe(); clearTimeout(safetyTimeout); };
   }, []);
 
   const t = useMemo(() => settings.translations[lang] || DEFAULT_TRANSLATIONS[lang], [settings, lang]);
-  
   const isAdmin = useMemo(() => {
     if (!user) return false;
     return user.role === 'admin' || user.email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();

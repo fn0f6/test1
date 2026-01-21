@@ -4,7 +4,7 @@ import { useSettings } from '../context/SettingsContext';
 import { Skull, Lock, ArrowLeft, Loader2, Mail, UserPlus, LogIn, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const AuthPage: React.FC = () => {
-  const { login, signup, navigateTo, user } = useSettings();
+  const { login, signup, navigateTo, user, isAdmin } = useSettings();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,17 +18,13 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
-  // تحويل المستخدم بناءً على الرتبة فور توفر البيانات
+  // التوجيه التلقائي عند توفر بيانات المستخدم
   useEffect(() => {
-    if (user && !loading && isMounted.current) {
-      // إذا كان أدمن يذهب للوحة التحكم، وإلا يذهب للموقع الرئيسي
-      if (user.role === 'admin') {
-        navigateTo('admin');
-      } else {
-        navigateTo('site');
-      }
+    if (user && isMounted.current) {
+      const destination = isAdmin ? 'admin' : 'site';
+      navigateTo(destination);
     }
-  }, [user, navigateTo, loading]);
+  }, [user, isAdmin, navigateTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,17 +36,15 @@ const AuthPage: React.FC = () => {
     
     try {
       if (isLoginMode) {
-        const { data, error: loginErr } = await login(email, password);
+        const { error: loginErr } = await login(email, password);
         if (loginErr) {
           if (isMounted.current) {
-            setError(loginErr.message || "فشل تسجيل الدخول");
+            setError(loginErr.message || "فشل تسجيل الدخول. تأكد من البيانات.");
             setLoading(false);
           }
-        } else if (data?.user) {
-          if (isMounted.current) {
-            setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التوجيه للوحة القيادة...");
-          }
-          // التحويل سيتم عبر useEffect تلقائياً عند تحديث حالة user
+        } else {
+            // النجاح سيقوم useEffect بالأعلى بالتعامل معه وتوجيه المستخدم
+            if (isMounted.current) setSuccessMsg("تم تسجيل الدخول! جاري الدخول للأسطول...");
         }
       } else {
         const { data, error: signupErr } = await signup(email, password);
@@ -62,9 +56,9 @@ const AuthPage: React.FC = () => {
         } else {
           if (isMounted.current) {
             if (data?.session) {
-              setSuccessMsg("تم إنشاء الحساب بنجاح! جاري الدخول...");
+              setSuccessMsg("تم إنشاء الحساب! مرحباً بك في الطاقم.");
             } else {
-              setSuccessMsg("تم إنشاء الحساب! أرسلنا لك بريداً ترحيبياً، يرجى تفعيل الحساب.");
+              setSuccessMsg("تم إنشاء الحساب! يرجى مراجعة بريدك الإلكتروني لتفعيل الحساب.");
               setLoading(false);
             }
           }
@@ -72,7 +66,7 @@ const AuthPage: React.FC = () => {
       }
     } catch (err: any) {
       if (isMounted.current) {
-        setError(err.message || "حدث خطأ في الاتصال");
+        setError("حدث خطأ غير متوقع. حاول مرة أخرى.");
         setLoading(false);
       }
     }

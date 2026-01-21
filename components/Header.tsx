@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Menu, X, Languages, Anchor, Shield, LogOut, User } from 'lucide-react';
+import { Menu, X, Languages, Anchor, Shield, LogOut, User, Crown } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 
 const Header: React.FC = () => {
@@ -76,26 +76,27 @@ const Header: React.FC = () => {
 
             {user ? (
               <div className="flex items-center gap-3">
-                {isAdmin ? (
-                  <button 
-                    onClick={() => navigateTo('admin')}
-                    className="hidden md:flex btn-modern items-center gap-2 bg-wood-800 border border-wood-600 px-6 h-12 rounded-xl text-gold font-black text-xs tracking-widest shadow-xl hover:bg-wood-700"
-                  >
-                    <Shield size={14} />
-                    {lang === 'en' ? 'COMMAND DECK' : 'لوحة القيادة'}
-                  </button>
-                ) : (
-                  <button onClick={() => navigateTo('admin')} className="hidden md:flex items-center gap-2 px-2 py-1 pr-4 bg-white/5 rounded-full border border-white/10 hover:border-gold/30 transition-all">
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-wood-800 border border-gold/20">
-                      {user.avatar_url ? (
-                        <img src={user.avatar_url} className="w-full h-full object-cover" alt="User" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gold"><User size={14} /></div>
-                      )}
+                <button 
+                  onClick={() => navigateTo('admin')}
+                  className={`hidden md:flex items-center gap-3 px-2 py-1.5 pr-5 rounded-2xl border transition-all ${isAdmin ? 'bg-gold/10 border-gold/30 hover:bg-gold/20' : 'bg-white/5 border-white/10 hover:border-gold/30'}`}
+                >
+                  <div className={`w-9 h-9 rounded-xl overflow-hidden border-2 flex items-center justify-center shrink-0 ${isAdmin ? 'border-gold shadow-lg shadow-gold/20' : 'border-white/20'}`}>
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} className="w-full h-full object-cover" alt="User" />
+                    ) : (
+                      <div className={isAdmin ? 'text-gold' : 'text-slate-400'}><User size={16} /></div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start leading-none">
+                    <span className="text-[10px] font-black text-white uppercase tracking-wider mb-1 line-clamp-1">{user.display_name || user.email?.split('@')[0]}</span>
+                    <div className="flex items-center gap-1">
+                      {isAdmin ? <Crown size={10} className="text-gold" fill="currentColor" /> : <Anchor size={10} className="text-slate-500" />}
+                      <span className={`text-[8px] font-black uppercase tracking-tighter ${isAdmin ? 'text-gold' : 'text-slate-500'}`}>
+                        {isAdmin ? (lang === 'en' ? 'CAPTAIN' : 'قبطان') : (lang === 'en' ? 'SAILOR' : 'بحار')}
+                      </span>
                     </div>
-                    <span className="text-xs text-white font-bold">{user.display_name || user.email?.split('@')[0]}</span>
-                  </button>
-                )}
+                  </div>
+                </button>
                 <button 
                   onClick={logout}
                   className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-all"
@@ -152,13 +153,13 @@ const Header: React.FC = () => {
                     onClick={() => navigateTo('admin')}
                     className="w-full py-4 text-left text-gold font-black text-xl uppercase tracking-widest hover:text-white transition-colors"
                   >
-                    {lang === 'en' ? 'My Quarters' : 'ملفي الشخصي'}
+                    {isAdmin ? (lang === 'en' ? 'Command Deck' : 'لوحة القيادة') : (lang === 'en' ? 'My Quarters' : 'ملفي الشخصي')}
                   </button>
                   <button 
                     onClick={logout}
                     className="w-full py-4 text-left text-red-500 font-black text-xl uppercase tracking-widest hover:text-white transition-colors"
                   >
-                    {lang === 'en' ? 'Abandon Ship (Logout)' : 'تسجيل خروج'}
+                    {lang === 'en' ? 'Abandon Ship' : 'مغادرة السفينة'}
                   </button>
                 </>
               )}

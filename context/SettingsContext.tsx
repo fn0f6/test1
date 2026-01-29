@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { SupportTicket, NewsItem, UserProfile } from '../types';
 import { apiService } from '../services/api';
 import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
@@ -82,45 +82,53 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (s) setSettings(s);
       setNews(n);
       setTickets(t);
-    } catch (e) {
-      console.error("Data refresh failed", e);
-    }
+    } catch (e) {}
   };
 
   const refreshUserProfile = async (): Promise<UserProfile | null> => {
     if (!isSupabaseConfigured) return null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // نحاول جلب الملف الشخصي
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-        
-        const userData: UserProfile = (data && !error) ? data : {
-          id: session.user.id,
-          email: session.user.email || '',
-          role: session.user.email === 'aaatay3@gmail.com' ? 'admin' : 'user',
-          display_name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0]
-        };
-        
-        setUser(userData);
-        return userData;
+      if (!session?.user) {
+        setUser(null);
+        return null;
       }
-      setUser(null);
-      return null;
+
+      // 1. استخراج بيانات أساسية فورية من الجلسة
+      const quickUser: UserProfile = {
+        id: session.user.id,
+        email: session.user.email || '',
+        role: session.user.email === 'aaatay3@gmail.com' ? 'admin' : 'user',
+        display_name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0]
+      };
+
+      // 2. تحديث الحالة فوراً بالبيانات السريعة لفتح الموقع
+      setUser(quickUser);
+
+      // 3. محاولة جلب البيانات الإضافية من الـ profiles في الخلفية
+      try {
+        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+        if (data) {
+          const fullUser = { ...quickUser, ...data };
+          setUser(fullUser);
+          return fullUser;
+        }
+      } catch (e) {
+        // إذا فشل جلب الـ profile لا مشكلة، لدينا الـ quickUser
+      }
+
+      return quickUser;
     } catch (e) {
-      console.error("Profile refresh error", e);
       return null;
     }
   };
 
   useEffect(() => {
     const init = async () => {
-      const safetyTimeout = setTimeout(() => setIsLoading(false), 5000);
       try {
         await refreshUserProfile();
         await refreshData();
       } finally {
-        clearTimeout(safetyTimeout);
         setIsLoading(false);
       }
     };
@@ -129,7 +137,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await refreshUserProfile();
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (event === 'SIGNED_IN') {
           setIsLoading(false);
         }
       } else {
@@ -150,7 +158,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     t: settings?.translations?.[lang] || DEFAULT_SETTINGS.translations[lang],
     navigateTo: (p: string) => {
       setCurrentPage(p);
-      window.scrollTo(0, 0);
+      window.scrollTo({ top: 0, behavior: 'instant' });
     },
     refreshUserProfile,
     login: (email: string, pass: string) => supabase.auth.signInWithPassword({ email, password: pass }),

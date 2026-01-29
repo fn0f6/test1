@@ -92,11 +92,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         if (!error && data) {
           setUser(data);
         } else {
-          // حالة طوارئ: إذا لم يجد الملف الشخصي بعد، استخدم بيانات الجلسة الأساسية مؤقتاً
+          // Fallback: استخدام بيانات الجلسة إذا لم يتوفر ملف شخصي بعد
           setUser({
             id: session.user.id,
             email: session.user.email || '',
@@ -114,6 +114,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     const init = async () => {
+      // وقت أمان لإخفاء شاشة التحميل مهما حدث بعد 5 ثواني
       const safetyTimeout = setTimeout(() => setIsLoading(false), 5000);
       try {
         await refreshUserProfile();
@@ -128,6 +129,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await refreshUserProfile();
+        // إيقاف شاشة التحميل فور تسجيل الدخول
         if (event === 'SIGNED_IN') setIsLoading(false);
       } else {
         setUser(null);

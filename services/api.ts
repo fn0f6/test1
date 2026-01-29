@@ -11,21 +11,21 @@ const apiService = {
       if (!data) return null;
       
       return {
-        logoUrl: data.logo_url,
-        heroBgUrl: data.hero_bg_url,
-        siteTitle: data.site_title,
-        androidUrl: data.android_url,
-        iosUrl: data.ios_url,
+        logoUrl: data.logo_url || 'assets/logo.svg',
+        heroBgUrl: data.hero_bg_url || 'assets/background.svg',
+        siteTitle: data.site_title || 'عصر الهامور',
+        androidUrl: data.android_url || '#',
+        iosUrl: data.ios_url || '#',
         isMaintenanceMode: !!data.is_maintenance_mode,
-        maintenanceMessage: data.maintenance_message,
-        qrData: data.qr_data,
-        customQrUrl: data.custom_qr_url,
+        maintenanceMessage: data.maintenance_message || 'الأسطول في مهمة صيانة سريعة، سنعود قريباً!',
+        qrData: data.qr_data || '',
+        customQrUrl: data.custom_qr_url || '',
         showcaseImages: data.showcase_images || {},
         translations: data.translations || {},
-        socialLinks: data.social_links || {}
+        socialLinks: data.social_links || { activeLinks: {} }
       };
     } catch (e) {
-      console.warn("Settings fetch failed", e);
+      console.warn("Settings fetch failed - using defaults", e);
       return null;
     }
   },
@@ -55,16 +55,19 @@ const apiService = {
     if (!isSupabaseConfigured) return [];
     try {
       const { data, error } = await supabase.from('news').select('*').order('created_at', { ascending: false });
-      if (error) return [];
+      if (error) throw error;
       return (data || []).map(item => ({
         id: item.id,
         title: item.title,
         excerpt: item.excerpt,
-        thumbnailUrl: item.thumbnail_url || 'https://placehold.co/800x600/111111/ffd700?text=FLEET+NEWS',
-        category: item.category,
-        date: item.date
+        thumbnailUrl: item.thumbnail_url || 'https://placehold.co/800x600/111111/ffd700?text=ASR+ALHAMOUR',
+        category: item.category || 'تحديث',
+        date: item.date || new Date().toLocaleDateString('ar-EG')
       })) as NewsItem[];
-    } catch { return []; }
+    } catch (e) { 
+      console.error("News fetch error", e);
+      return []; 
+    }
   },
 
   addNews: async (news: any) => {
@@ -72,7 +75,7 @@ const apiService = {
     const { error } = await supabase.from('news').insert([{
       title: news.title,
       excerpt: news.excerpt,
-      thumbnail_url: news.thumbnailUrl || '', // جعل الحقل اختيارياً
+      thumbnail_url: news.thumbnailUrl || '', // اختيارية
       category: news.category,
       date: new Date().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })
     }]);
@@ -88,7 +91,7 @@ const apiService = {
     if (!isSupabaseConfigured) return [];
     try {
       const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-      if (error) return [];
+      if (error) throw error;
       return (data || []).map(t => ({
         id: t.id,
         name: t.name,
@@ -97,7 +100,10 @@ const apiService = {
         message: t.message,
         createdAt: t.created_at
       })) as SupportTicket[];
-    } catch { return []; }
+    } catch (e) {
+      console.error("Tickets fetch error", e);
+      return [];
+    }
   },
 
   submitTicket: async (ticket: any) => {
@@ -116,9 +122,14 @@ const apiService = {
 
   getAllProfiles: async () => {
     if (!isSupabaseConfigured) return [];
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    } catch (e) {
+      console.error("Profiles fetch error", e);
+      return [];
+    }
   },
 
   updateUserRole: async (id: string, role: string) => {
@@ -136,27 +147,11 @@ const apiService = {
 
   uploadImage: async (file: File, bucket: string = 'assets') => {
     if (!isSupabaseConfigured) return '';
-    
     const fileExt = file.name.split('.').pop();
     const cleanFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `${cleanFileName}`;
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-    
-    if (error) {
-      console.error("Storage Upload Error:", error);
-      throw error;
-    }
-    
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
-      
+    const { data, error } = await supabase.storage.from(bucket).upload(cleanFileName, file);
+    if (error) throw error;
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(cleanFileName);
     return publicUrl;
   }
 };

@@ -56,6 +56,32 @@ function AppContent() {
     }
   }, [user, currentPage, navigateTo, isLoading]);
 
+  // Global Scroll Reveal Handler
+  useEffect(() => {
+    if (isLoading || currentPage !== 'site') return;
+
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+          // No unobserve here if we want items to re-animate (optional)
+          // observer.unobserve(entry.target); 
+        }
+      });
+    }, observerOptions);
+
+    // Track all reveal-on-scroll elements
+    const elements = document.querySelectorAll('.reveal-on-scroll');
+    elements.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [isLoading, currentPage]);
+
   if (isLoading) return <LoadingScreen />;
 
   if (currentPage === 'admin' && user) {

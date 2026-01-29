@@ -6,23 +6,18 @@ import { useSettings } from '../context/SettingsContext';
 const DownloadCenter: React.FC = () => {
   const { settings, t, lang } = useSettings();
 
-  // تحديد مصدر صورة الـ QR
-  // 1. إذا كان هناك صورة مرفوعة يدوياً
-  // 2. إذا كان هناك رابط مخصص لتوليد الـ QR
-  // 3. الرابط الحالي للموقع كخيار افتراضي
   const qrSource = settings.customQrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(settings.qrData || window.location.href)}`;
 
   return (
     <section id="downloads" className="py-24 bg-ocean-950 scroll-mt-20 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 reveal-on-scroll">
         
         <div className="relative rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.9)] border border-wood-500/20 group">
-            {/* استخدام صورة السفن كخلفية بدلاً من رابط Unsplash */}
             <div className="absolute inset-0 bg-cover bg-center z-0 opacity-20 group-hover:scale-105 transition-transform duration-[2000ms]" style={{ backgroundImage: "url('assets/ships_at_sea.png')" }}></div>
             <div className="absolute inset-0 bg-gradient-to-b from-ocean-900/98 via-ocean-950/95 to-ocean-950 z-0"></div>
 
             <div className="relative z-10 p-8 md:p-20">
-              <div className="text-center mb-20 animate-fade-in-up">
+              <div className="text-center mb-20">
                 <div className="inline-block relative px-12 py-6 mb-10">
                    <div className="absolute inset-0 bg-wood-800 border-2 border-wood-500 rounded-2xl transform -rotate-2 shadow-2xl"></div>
                    <div className="relative z-10 flex items-center gap-8">
@@ -69,7 +64,7 @@ const DownloadCenter: React.FC = () => {
                    </div>
                 </div>
 
-                <div className="space-y-12 animate-fade-in-up delay-300">
+                <div className="space-y-12">
                   <div className="bg-wood-800/40 backdrop-blur-md p-12 rounded-[2.5rem] border border-wood-600/30 shadow-2xl flex flex-col md:flex-row items-center gap-12 relative overflow-hidden group/qr hover:bg-wood-800/60 transition-colors">
                     <div className="absolute inset-0 bg-wood-pattern opacity-5"></div>
                     <div className="bg-white p-5 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative z-10 rotate-6 group-hover/qr:rotate-0 transition-transform duration-700 shrink-0">

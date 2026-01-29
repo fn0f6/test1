@@ -18,13 +18,19 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
-  // التوجيه التلقائي عند توفر بيانات المستخدم في السياق
+  // مراقب ذكي: بمجرد توفر بيانات المستخدم والملف الشخصي في السياق، يتم التحويل فوراً
   useEffect(() => {
     if (user && isMounted.current) {
       const destination = user.role === 'admin' ? 'admin' : 'site';
-      navigateTo(destination);
+      setSuccessMsg(isLoginMode ? "تم التحقق.. جاري فتح البوابة" : "مرحباً بك في الطاقم.. جاري التحويل");
+      
+      const timer = setTimeout(() => {
+        if (isMounted.current) navigateTo(destination);
+      }, 800);
+      
+      return () => clearTimeout(timer);
     }
-  }, [user, navigateTo]);
+  }, [user, navigateTo, isLoginMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,24 +42,24 @@ const AuthPage: React.FC = () => {
     
     try {
       if (isLoginMode) {
+        // تسجيل الدخول
         const { data, error: loginErr } = await login(email, password);
+        
         if (loginErr) {
           if (isMounted.current) {
-            setError(loginErr.message || "فشل تسجيل الدخول. تأكد من البيانات.");
+            setError(loginErr.message === "Invalid login credentials" ? "بيانات الدخول غير صحيحة" : loginErr.message);
             setLoading(false);
           }
         } else if (data?.user) {
-            if (isMounted.current) {
-              setSuccessMsg("تم تسجيل الدخول! جاري الدخول للأسطول...");
-              // توجيه يدوي سريع كدعم إضافي
-              const isMaster = email.toLowerCase() === 'aaatay3@gmail.com';
-              setTimeout(() => {
-                if (isMounted.current) navigateTo(isMaster ? 'admin' : 'site');
-              }, 1000);
-            }
+          if (isMounted.current) {
+            setSuccessMsg("تم العثور على السجل.. جاري التحقق من الرتبة");
+            // التحويل سيتم عبر الـ useEffect أعلاه بمجرد تحديث حالة الـ user
+          }
         }
       } else {
+        // إنشاء حساب جديد
         const { data, error: signupErr } = await signup(email, password);
+        
         if (signupErr) {
           if (isMounted.current) {
             setError(signupErr.message || "فشل إنشاء الحساب");
@@ -62,9 +68,9 @@ const AuthPage: React.FC = () => {
         } else {
           if (isMounted.current) {
             if (data?.session) {
-              setSuccessMsg("تم إنشاء الحساب! مرحباً بك في الطاقم.");
+              setSuccessMsg("تم إنشاء حسابك بنجاح! جاري إدخالك للمقر..");
             } else {
-              setSuccessMsg("تم إنشاء الحساب! يرجى مراجعة بريدك الإلكتروني لتفعيل الحساب.");
+              setSuccessMsg("تم إرسال رسالة تأكيد لبريدك الإلكتروني. يرجى تفعيل الحساب للمتابعة.");
               setLoading(false);
             }
           }
@@ -72,7 +78,7 @@ const AuthPage: React.FC = () => {
       }
     } catch (err: any) {
       if (isMounted.current) {
-        setError("حدث خطأ غير متوقع. حاول مرة أخرى.");
+        setError("حدث خطأ في الاتصال بقاعدة البيانات.");
         setLoading(false);
       }
     }
@@ -100,10 +106,10 @@ const AuthPage: React.FC = () => {
 
           <div className="text-center mt-6 mb-8">
             <h2 className="text-3xl font-display font-black text-white uppercase tracking-tighter mb-2">
-              {isLoginMode ? 'دخول الأسطول' : 'انضم للطاقم'}
+              {isLoginMode ? 'دخول المقر' : 'توقيع العقد'}
             </h2>
             <p className="text-wood-500 text-sm font-medium">
-              {isLoginMode ? 'أدخل بياناتك للسيطرة على الأسطول' : 'أنشئ أسطورتك الخاصة وابدأ المغامرة'}
+              {isLoginMode ? 'أدخل شيفرة الدخول السرية' : 'انضم لأسطول الهامور وابدأ جنيك للثروات'}
             </p>
           </div>
 
@@ -168,7 +174,7 @@ const AuthPage: React.FC = () => {
             {successMsg && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl text-center flex flex-col items-center justify-center gap-3 animate-fade-in">
                 <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500">
-                  <CheckCircle2 size={24} />
+                  <CheckCircle2 size={24} className="animate-pulse" />
                 </div>
                 <div>
                   <p className="text-emerald-400 text-[11px] font-black uppercase tracking-widest text-center leading-relaxed">{successMsg}</p>
@@ -181,7 +187,7 @@ const AuthPage: React.FC = () => {
               disabled={loading}
               className="w-full bg-gold text-wood-900 font-black h-14 rounded-2xl uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(255,215,0,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mt-4 disabled:grayscale disabled:opacity-50"
             >
-              {loading ? <Loader2 className="animate-spin" size={20} /> : (isLoginMode ? <><LogIn size={18} /> دخول</> : <><UserPlus size={18} /> انضمام</>)}
+              {loading ? <Loader2 className="animate-spin" size={20} /> : (isLoginMode ? <><LogIn size={18} /> دخول</> : <><UserPlus size={18} /> تسجيل الحساب</>)}
             </button>
           </form>
         </div>

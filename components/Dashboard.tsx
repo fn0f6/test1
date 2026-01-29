@@ -1,18 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { useSettings, SiteSettings, Language } from '../context/SettingsContext';
+import { useSettings, SiteSettings } from '../context/SettingsContext';
 import { apiService } from '../services/api';
 import { 
   BarChart3, Newspaper, Mail, Settings, LogOut, Trash2, ShieldCheck, 
   Loader2, CheckCircle2, Save, Type, Share2, ImageIcon,
-  User, ExternalLink, Users, Crown, PlusCircle, Globe, Smartphone, QrCode
+  User, ExternalLink, Users, Crown, PlusCircle, Smartphone, QrCode
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  // Added setLang to the destructuring from useSettings
   const { 
     settings, updateSettings, tickets, news, addNews, deleteNews, deleteTicket,
-    logout, user, getAllUsers, updateUserRole, navigateTo, lang, setLang, refreshUserProfile
+    logout, user, getAllUsers, updateUserRole, navigateTo, lang, setLang
   } = useSettings();
   
   const [activeTab, setActiveTab] = useState<'stats' | 'news' | 'users' | 'system' | 'social' | 'content' | 'profile' | 'inbox'>('stats');
@@ -28,8 +27,12 @@ const Dashboard: React.FC = () => {
   }, [activeTab, settings]);
 
   const fetchUsers = async () => {
-    const data = await getAllUsers();
-    setUsersList(data);
+    try {
+      const data = await getAllUsers();
+      setUsersList(data);
+    } catch (e) {
+      console.error("Failed to fetch users", e);
+    }
   };
 
   const showSuccess = () => { 
@@ -41,15 +44,21 @@ const Dashboard: React.FC = () => {
     setIsSaving(true);
     try {
       const url = await apiService.uploadImage(file);
-      if (subKey) {
-        const updatedSub = { ...(localSettings as any)[field], [subKey]: url };
-        setLocalSettings(prev => ({ ...prev, [field]: updatedSub }));
-      } else {
-        setLocalSettings(prev => ({ ...prev, [field]: url }));
+      if (url) {
+        if (field === 'user') {
+          // خاص بالملف الشخصي للأدمن نفسه
+          await apiService.updateProfile(user!.id, { [subKey!]: url });
+          window.location.reload(); // تحديث سريع لرؤية النتيجة
+        } else if (subKey) {
+          const updatedSub = { ...(localSettings as any)[field], [subKey]: url };
+          setLocalSettings(prev => ({ ...prev, [field]: updatedSub }));
+        } else {
+          setLocalSettings(prev => ({ ...prev, [field]: url }));
+        }
+        showSuccess();
       }
-      showSuccess();
-    } catch (e) {
-      alert("فشل رفع الصورة، تأكد من إعدادات Storage في Supabase");
+    } catch (e: any) {
+      alert(`خطأ في الرفع: ${e.message || "تأكد من وجود Bucket باسم 'assets' وجعله Public"}`);
     } finally {
       setIsSaving(false);
     }
@@ -170,7 +179,11 @@ const Dashboard: React.FC = () => {
                         <td className="p-6">
                            <select 
                             value={u.role} 
-                            onChange={(e) => { updateUserRole(u.id, e.target.value); fetchUsers(); }}
+                            onChange={async (e) => { 
+                              await updateUserRole(u.id, e.target.value); 
+                              fetchUsers(); 
+                              showSuccess();
+                            }}
                             className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
                            >
                              <option value="user">SAILOR</option>
@@ -252,7 +265,7 @@ const Dashboard: React.FC = () => {
                 <div className="grid md:grid-cols-2 gap-10">
                    {Object.keys(localSettings.translations[lang] || {}).map(key => (
                      <div key={key} className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-gold tracking-widest">{key.replace('nav', 'Navigation: ').replace('hero', 'Hero Section: ')}</label>
+                        <label className="text-[10px] font-black uppercase text-gold tracking-widest">{key}</label>
                         <input 
                           type="text" 
                           className="w-full bg-black/60 border border-white/10 p-5 rounded-2xl outline-none focus:border-gold/50" 
@@ -274,7 +287,6 @@ const Dashboard: React.FC = () => {
             <div className="glass-card p-10 rounded-[3rem] border-white/5 space-y-10 bg-black/40">
                <div className="flex items-center justify-between">
                   <h3 className="text-2xl font-black">روابط أسطول الهامور</h3>
-                  <button onClick={handleSave} className="flex items-center gap-2 bg-gold text-black font-black px-8 py-3 rounded-xl text-sm shadow-lg hover:scale-105 transition-all"><Save size={18}/> حفظ التغييرات</button>
                </div>
                <div className="grid md:grid-cols-2 gap-8">
                   {Object.keys(localSettings.socialLinks.activeLinks).map(key => (
@@ -308,6 +320,7 @@ const Dashboard: React.FC = () => {
                     </div>
                   ))}
                </div>
+               <button onClick={handleSave} className="w-full bg-gold text-black font-black py-5 rounded-2xl text-lg shadow-xl">حفظ روابط التواصل</button>
             </div>
           )}
 
@@ -334,10 +347,7 @@ const Dashboard: React.FC = () => {
 
                   <div className="space-y-3">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">رابط متجر أندرويد</label>
-                    <div className="relative">
-                      <Smartphone className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                      <input type="text" className="w-full bg-black/60 border border-white/10 p-5 pr-14 rounded-2xl outline-none" value={localSettings.androidUrl} onChange={e => setLocalSettings({...localSettings, androidUrl: e.target.value})} />
-                    </div>
+                    <input type="text" className="w-full bg-black/60 border border-white/10 p-5 rounded-2xl outline-none" value={localSettings.androidUrl} onChange={e => setLocalSettings({...localSettings, androidUrl: e.target.value})} />
                   </div>
 
                   <button onClick={handleSave} className="w-full bg-gold text-black font-black py-5 rounded-2xl shadow-lg">تحديث الهوية</button>
@@ -416,12 +426,11 @@ const Dashboard: React.FC = () => {
                           <p className="text-xs text-slate-500 font-bold">{t.name} • {t.email}</p>
                         </div>
                       </div>
-                      <button onClick={() => deleteTicket(t.id)} className="text-red-500 hover:bg-red-500/10 p-3 rounded-xl transition-colors"><Trash2 size={20}/></button>
+                      <button onClick={async () => { if(confirm("حذف الرسالة؟")) { await deleteTicket(t.id); showSuccess(); } }} className="text-red-500 hover:bg-red-500/10 p-3 rounded-xl transition-colors"><Trash2 size={20}/></button>
                     </div>
                     <div className="bg-black/40 p-6 rounded-2xl border border-white/5">
                       <p className="text-sm text-slate-300 leading-relaxed font-medium">{t.message}</p>
                     </div>
-                    {/* Fixed SupportTicket property name from created_at to createdAt */}
                     <p className="text-[10px] text-slate-600 font-black uppercase tracking-widest text-left">{new Date(t.createdAt).toLocaleString('ar-EG')}</p>
                  </div>
                ))}

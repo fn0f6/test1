@@ -18,66 +18,61 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
-  // تحويل فوري بمجرد توفر الـ user في الـ Context
+  // تحويل إضافي في حال تغير حالة المستخدم في الـ Context
   useEffect(() => {
-    if (user && isMounted.current) {
+    if (user && !localLoading && isMounted.current) {
       const destination = user.role === 'admin' ? 'admin' : 'site';
-      setSuccessMsg("تم التعرف على القبطان.. جاري فتح البوابة");
-      
-      const timer = setTimeout(() => {
-        if (isMounted.current) {
-          setIsLoading(false);
-          navigateTo(destination);
-        }
-      }, 800);
-      return () => clearTimeout(timer);
+      navigateTo(destination);
     }
-  }, [user, navigateTo, setIsLoading]);
+  }, [user, localLoading, navigateTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (localLoading) return;
 
-    // تنظيف الحالات السابقة
     setLocalLoading(true);
     setError(null);
     setSuccessMsg(null);
     
     try {
-      // تنفيذ المحاولة
       const action = isLoginMode ? login(email, password) : signup(email, password);
       const { data, error: apiErr } = await action;
       
       if (apiErr) {
         if (isMounted.current) {
           let msg = apiErr.message;
-          if (msg.includes("Invalid login credentials")) msg = "بيانات الدخول غير صحيحة (تأكد من الإيميل وكلمة المرور)";
-          if (msg.includes("Email not confirmed")) msg = "يرجى تأكيد بريدك الإلكتروني أولاً";
+          if (msg.includes("Invalid login credentials")) msg = "بيانات الدخول غير صحيحة";
+          if (msg.includes("Email not confirmed")) msg = "يرجى تأكيد البريد الإلكتروني أولاً";
+          if (msg.includes("rate limit")) msg = "محاولات كثيرة جداً، انتظر قليلاً";
           setError(msg);
           setLocalLoading(false);
         }
         return;
       }
 
-      // إذا وصلنا هنا، يعني العملية نجحت في Supabase
-      if (data?.user || data?.session) {
+      // في حال تسجيل دخول ناجح
+      if (data?.session) {
+        setSuccessMsg("تمت المصادقة بنجاح.. جاري الدخول");
+        
+        // جلب الملف الشخصي والتحويل فوراً
+        const profile = await refreshUserProfile();
         if (isMounted.current) {
-          setSuccessMsg(isLoginMode ? "نجحت الشفرة.. جاري الإبحار" : "تم توقيع العقد! تحقق من بريدك لتفعيل الحساب.");
-          
-          // محاولة تحديث الملف الشخصي فوراً
-          await refreshUserProfile();
-          
-          // إيقاف الـ spinner المحلي للسماح للـ useEffect بالتحويل
           setLocalLoading(false);
+          setIsLoading(false);
+          navigateTo(profile?.role === 'admin' ? 'admin' : 'site');
         }
       } else if (!isLoginMode) {
-        // حالة التسجيل (Signup) في حال تطلب تأكيد إيميل ولم يرجع session
-        setSuccessMsg("تم إرسال رسالة تفعيل لبريدك الإلكتروني.");
+        // حالة تسجيل جديد (Signup) ناجح
+        setSuccessMsg("تم إرسال رابط التفعيل لبريدك الإلكتروني.");
+        setLocalLoading(false);
+      } else {
+        // في حال نجحت العملية لكن لا توجد جلسة (نادر الحدوث)
+        setError("فشل الحصول على جلسة دخول. حاول مرة أخرى.");
         setLocalLoading(false);
       }
     } catch (err: any) {
       if (isMounted.current) {
-        setError("فشل الاتصال ببرج المراقبة. تأكد من الإنترنت.");
+        setError("فشل الاتصال بالخادم الرئيسي.");
         setLocalLoading(false);
       }
     }
@@ -85,7 +80,6 @@ const AuthPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050301] flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Decor */}
       <div className="absolute inset-0 bg-wood-pattern opacity-5 pointer-events-none"></div>
       <div className="absolute -top-24 -left-24 w-96 h-96 bg-gold/10 rounded-full blur-[120px]"></div>
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-gold/10 rounded-full blur-[120px]"></div>
@@ -100,7 +94,6 @@ const AuthPage: React.FC = () => {
         </button>
 
         <div className="bg-wood-950/40 backdrop-blur-3xl border border-white/5 p-10 md:p-12 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] relative">
-          {/* Badge icon */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-gold rounded-3xl rotate-12 flex items-center justify-center shadow-2xl">
             <Skull className="text-wood-900 -rotate-12" size={36} />
           </div>
@@ -167,14 +160,14 @@ const AuthPage: React.FC = () => {
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center flex items-center justify-center gap-3 animate-shake">
+              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-center flex items-center justify-center gap-3">
                 <AlertTriangle size={16} className="text-red-500 shrink-0" />
                 <p className="text-red-400 text-[10px] font-bold uppercase leading-tight">{error}</p>
               </div>
             )}
 
             {successMsg && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-center flex items-center justify-center gap-3 animate-fade-in">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-center flex items-center justify-center gap-3">
                 <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
                 <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">{successMsg}</p>
               </div>

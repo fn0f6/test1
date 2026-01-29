@@ -60,7 +60,7 @@ const apiService = {
         id: item.id,
         title: item.title,
         excerpt: item.excerpt,
-        thumbnailUrl: item.thumbnail_url,
+        thumbnailUrl: item.thumbnail_url || 'https://placehold.co/800x600/111111/ffd700?text=FLEET+LOG',
         category: item.category,
         date: item.date
       })) as NewsItem[];
@@ -72,7 +72,7 @@ const apiService = {
     const { error } = await supabase.from('news').insert([{
       title: news.title,
       excerpt: news.excerpt,
-      thumbnail_url: news.thumbnailUrl,
+      thumbnail_url: news.thumbnailUrl || '', // جعلها فارغة إذا لم تتوفر
       category: news.category,
       date: new Date().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })
     }]);
@@ -137,7 +137,6 @@ const apiService = {
   uploadImage: async (file: File, bucket: string = 'assets') => {
     if (!isSupabaseConfigured) return '';
     
-    // تنظيف اسم الملف من الحروف الخاصة
     const fileExt = file.name.split('.').pop();
     const cleanFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${cleanFileName}`;

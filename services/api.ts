@@ -3,7 +3,6 @@ import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { NewsItem, SupportTicket } from '../types';
 
 const apiService = {
-  // جلب إعدادات الموقع
   getSettings: async () => {
     if (!isSupabaseConfigured) return null;
     try {
@@ -18,7 +17,7 @@ const apiService = {
         androidUrl: data.android_url,
         iosUrl: data.ios_url,
         isMaintenanceMode: !!data.is_maintenance_mode,
-        maintenanceMessage: data.maintenance_message,
+        maintenance_message: data.maintenance_message,
         qrData: data.qr_data,
         customQrUrl: data.custom_qr_url,
         showcaseImages: data.showcase_images || {},
@@ -26,7 +25,7 @@ const apiService = {
         socialLinks: data.social_links || {}
       };
     } catch (e) {
-      console.warn("Settings fetch failed, using defaults. Error:", e);
+      console.warn("Settings fetch failed", e);
       return null;
     }
   },
@@ -52,7 +51,6 @@ const apiService = {
     if (error) throw error;
   },
 
-  // الأخبار
   getNews: async () => {
     if (!isSupabaseConfigured) return [];
     try {
@@ -86,7 +84,6 @@ const apiService = {
     await supabase.from('news').delete().eq('id', id);
   },
 
-  // رسائل الدعم
   getTickets: async () => {
     if (!isSupabaseConfigured) return [];
     try {
@@ -105,7 +102,6 @@ const apiService = {
     await supabase.from('tickets').delete().eq('id', id);
   },
 
-  // إدارة المستخدمين
   getAllProfiles: async () => {
     if (!isSupabaseConfigured) return [];
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -124,13 +120,18 @@ const apiService = {
     return data;
   },
 
-  // رفع الصور
   uploadImage: async (file: File, bucket: string = 'assets') => {
     if (!isSupabaseConfigured) return '';
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const { error } = await supabase.storage.from(bucket).upload(fileName, file);
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    
+    const { error } = await supabase.storage.from(bucket).upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false
+    });
+    
     if (error) throw error;
+    
     const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
     return data.publicUrl;
   }

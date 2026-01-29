@@ -1,27 +1,10 @@
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { Shield, Map, MessageSquare, ShoppingCart, Trophy, Box } from 'lucide-react';
 
 const GameShowcase: React.FC = () => {
   const { t, settings } = useSettings();
-  const showcaseRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('active');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.1 });
-
-    const revealElements = showcaseRef.current?.querySelectorAll('.reveal-on-scroll');
-    revealElements?.forEach(el => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [settings]);
 
   const features = [
     { id: 'map', title: t.featMap, desc: t.featMapDesc, icon: <Map className="text-gold" size={24} />, img: settings.showcaseImages.map, delay: 0 },
@@ -33,11 +16,11 @@ const GameShowcase: React.FC = () => {
   ];
 
   return (
-    <section id="showcase" ref={showcaseRef} className="py-20 md:py-32 bg-[#050505] relative overflow-hidden scroll-mt-20">
+    <section id="showcase" className="py-20 md:py-32 bg-[#050505] relative overflow-hidden scroll-mt-20">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,215,0,0.03),transparent_70%)] pointer-events-none"></div>
       
-      <div className="max-w-7xl mx-auto px-6 relative z-10">
-        <div className="text-center mb-16 md:mb-24 reveal-on-scroll">
+      <div className="max-w-7xl mx-auto px-6 relative z-10 reveal-on-scroll">
+        <div className="text-center mb-16 md:mb-24">
            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card border-gold/10 text-gold text-[10px] font-black uppercase tracking-[0.4em] mb-6">
              In-Game Snapshots
            </div>
@@ -51,8 +34,7 @@ const GameShowcase: React.FC = () => {
           {features.map((feat) => (
             <div 
               key={feat.id} 
-              className="reveal-on-scroll flex flex-col items-center group"
-              style={{ transitionDelay: `${feat.delay}ms` }}
+              className="flex flex-col items-center group"
             >
               <div className="relative w-48 xs:w-56 md:w-64 lg:w-72 mb-8 transition-transform duration-700 group-hover:-translate-y-4 will-change-transform">
                 <div className="relative z-20 aspect-[9/19.5] rounded-[2.5rem] md:rounded-[3rem] border-[6px] md:border-[10px] border-[#1a1a1a] shadow-[0_30px_80px_rgba(0,0,0,0.8)] overflow-hidden bg-[#0a0a0a] ring-1 ring-white/10">
@@ -62,7 +44,6 @@ const GameShowcase: React.FC = () => {
                       loading="lazy"
                       decoding="async"
                       onError={(e) => { 
-                        // تشفير النص لمنع أخطاء الروابط
                         const encodedText = encodeURIComponent(feat.title);
                         (e.target as HTMLImageElement).src = `https://placehold.co/800x1600/111111/ffd700?text=${encodedText}`; 
                       }}

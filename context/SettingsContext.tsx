@@ -58,7 +58,7 @@ interface SettingsContextType {
   getAllUsers: () => Promise<UserProfile[]>;
   updateUserRole: (id: string, role: string) => Promise<void>;
   updateUserProfile: (u: any) => Promise<void>;
-  refreshUserProfile: () => Promise<void>;
+  refreshUserProfile: () => Promise<UserProfile | null>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -87,34 +87,34 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const refreshUserProfile = async () => {
-    if (!isSupabaseConfigured) return;
+  const refreshUserProfile = async (): Promise<UserProfile | null> => {
+    if (!isSupabaseConfigured) return null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        // نحاول جلب الملف الشخصي
         const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-        if (!error && data) {
-          setUser(data);
-        } else {
-          // Fallback: استخدام بيانات الجلسة إذا لم يتوفر ملف شخصي بعد
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-            role: session.user.email === 'aaatay3@gmail.com' ? 'admin' : 'user',
-            display_name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0]
-          });
-        }
-      } else {
-        setUser(null);
+        
+        const userData: UserProfile = (data && !error) ? data : {
+          id: session.user.id,
+          email: session.user.email || '',
+          role: session.user.email === 'aaatay3@gmail.com' ? 'admin' : 'user',
+          display_name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0]
+        };
+        
+        setUser(userData);
+        return userData;
       }
+      setUser(null);
+      return null;
     } catch (e) {
       console.error("Profile refresh error", e);
+      return null;
     }
   };
 
   useEffect(() => {
     const init = async () => {
-      // وقت أمان لإخفاء شاشة التحميل مهما حدث بعد 5 ثواني
       const safetyTimeout = setTimeout(() => setIsLoading(false), 5000);
       try {
         await refreshUserProfile();
@@ -129,8 +129,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await refreshUserProfile();
-        // إيقاف شاشة التحميل فور تسجيل الدخول
-        if (event === 'SIGNED_IN') setIsLoading(false);
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          setIsLoading(false);
+        }
       } else {
         setUser(null);
         if (event === 'SIGNED_OUT') {
@@ -147,11 +148,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     settings, tickets, news, isLoading, setIsLoading, currentPage, lang, setLang,
     user, isAdmin: user?.role === 'admin',
     t: settings?.translations?.[lang] || DEFAULT_SETTINGS.translations[lang],
-    navigateTo: setCurrentPage,
+    navigateTo: (p: string) => {
+      setCurrentPage(p);
+      window.scrollTo(0, 0);
+    },
     refreshUserProfile,
     login: (email: string, pass: string) => supabase.auth.signInWithPassword({ email, password: pass }),
-    signup: (email: string, pass: string) => supabase.auth.signUp({ email, password: pass }),
-    logout: () => supabase.auth.signOut(),
+    signup: (email: string, pass: string) => supabase.auth.signUp({ 
+      email, 
+      password: pass,
+      options: { data: { display_name: email.split('@')[0] } }
+    }),
+    logout: async () => {
+      setIsLoading(true);
+      await supabase.auth.signOut();
+      setUser(null);
+      setCurrentPage('site');
+      setIsLoading(false);
+    },
     updateSettings: async (ns: any) => {
       const updated = { ...settings, ...ns };
       setSettings(updated);

@@ -48,17 +48,19 @@ const MaintenanceScreen = () => {
 function AppContent() {
   const { currentPage, settings, user, isAdmin, isLoading, navigateTo } = useSettings();
 
-  // توجيه تلقائي: إذا كان المستخدم مسجلاً وهو في صفحة الدخول، انقله للمكان المناسب
+  // توجيه تلقائي ذكي
   useEffect(() => {
-    if (user && currentPage === 'login') {
-      const dest = user.role === 'admin' ? 'admin' : 'site';
-      navigateTo(dest);
+    if (!isLoading && user) {
+      // إذا كنا في صفحة اللوجين ومسجل دخول، وجهنا للمكان المناسب
+      if (currentPage === 'login') {
+        navigateTo(user.role === 'admin' ? 'admin' : 'site');
+      }
     }
-  }, [user, currentPage, navigateTo]);
+  }, [user, currentPage, navigateTo, isLoading]);
 
   if (isLoading) return <LoadingScreen />;
 
-  // الأولوية 1: إذا كان المستخدم مسجلاً ويطلب صفحة الآدمن، أظهر له الداشبورد
+  // الأولوية 1: صفحة الإدارة (للمسجلين فقط)
   if (currentPage === 'admin' && user) {
     return (
       <Suspense fallback={<LoadingScreen />}>
@@ -67,8 +69,8 @@ function AppContent() {
     );
   }
 
-  // الأولوية 2: إذا كان المستخدم غير مسجل ويطلب الآدمن أو اللوجين، أظهر صفحة اللوجين
-  if ((currentPage === 'login' || currentPage === 'admin') && !user) {
+  // الأولوية 2: صفحة الدخول (لغير المسجلين أو من يطلبها صراحة)
+  if (currentPage === 'login') {
     return (
       <Suspense fallback={<LoadingScreen />}>
         <AuthPage />

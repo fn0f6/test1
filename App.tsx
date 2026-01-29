@@ -16,11 +16,8 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 
 const LoadingScreen = () => (
   <div className="fixed inset-0 bg-[#050505] flex flex-col items-center justify-center z-[999]">
-    <div className="custom-loader mb-6"></div>
-    <div className="w-32 h-[1px] bg-white/5 overflow-hidden rounded-full">
-      <div className="h-full bg-gold animate-[reveal_2s_infinite] will-change-transform"></div>
-    </div>
-    <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-gold/40">Loading Fleet Data...</p>
+    <div className="w-12 h-12 border-4 border-gold/10 border-t-gold rounded-full animate-spin mb-6"></div>
+    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gold/40">Loading Fleet Data...</p>
   </div>
 );
 
@@ -29,18 +26,15 @@ const MaintenanceScreen = () => {
   if (isAdmin) return null;
 
   return (
-    <div className="fixed inset-0 bg-[#050505] flex flex-col items-center justify-center p-6 text-center z-[200] overflow-hidden">
-      <div className="absolute inset-0 bg-wood-pattern opacity-5 pointer-events-none"></div>
-      <div className="relative z-10">
-        <div className="w-24 h-24 bg-red-500/10 rounded-3xl flex items-center justify-center mb-8 border border-red-500/20 mx-auto">
-          <AlertOctagon size={48} className="text-red-500" />
-        </div>
-        <h1 className="text-4xl font-display font-black text-white uppercase mb-6 tracking-tighter">صيانة السفينة</h1>
-        <p className="text-slate-400 max-w-lg mx-auto mb-12">{settings.maintenanceMessage}</p>
-        {!user && (
-          <button onClick={() => navigateTo('login')} className="text-[10px] font-black uppercase text-slate-500 hover:text-white">دخول الإدارة</button>
-        )}
+    <div className="fixed inset-0 bg-[#050505] flex flex-col items-center justify-center p-6 text-center z-[200]">
+      <div className="w-24 h-24 bg-red-500/10 rounded-3xl flex items-center justify-center mb-8 border border-red-500/20 mx-auto">
+        <AlertOctagon size={48} className="text-red-500" />
       </div>
+      <h1 className="text-4xl font-display font-black text-white uppercase mb-6">صيانة السفينة</h1>
+      <p className="text-slate-400 max-w-lg mx-auto mb-12">{settings.maintenanceMessage}</p>
+      {!user && (
+        <button onClick={() => navigateTo('login')} className="text-[10px] font-black uppercase text-slate-500 hover:text-white">دخول الإدارة</button>
+      )}
     </div>
   );
 };
@@ -55,32 +49,6 @@ function AppContent() {
       }
     }
   }, [user, currentPage, navigateTo, isLoading]);
-
-  // Global Scroll Reveal Handler
-  useEffect(() => {
-    if (isLoading || currentPage !== 'site') return;
-
-    const observerOptions = {
-      threshold: 0.1,
-      rootMargin: '0px 0px -50px 0px'
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('active');
-          // No unobserve here if we want items to re-animate (optional)
-          // observer.unobserve(entry.target); 
-        }
-      });
-    }, observerOptions);
-
-    // Track all reveal-on-scroll elements
-    const elements = document.querySelectorAll('.reveal-on-scroll');
-    elements.forEach(el => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [isLoading, currentPage]);
 
   if (isLoading) return <LoadingScreen />;
 
@@ -105,26 +73,16 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] selection:bg-gold/30 selection:text-gold overflow-x-hidden relative">
-      {/* خلفية الموقع الشاملة */}
-      <div 
-        className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none transition-opacity duration-1000"
-        style={{ backgroundImage: `url('${settings.heroBgUrl}')` }}
-      >
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px]"></div>
-      </div>
-
-      <div className="relative z-10">
-        <Header />
-        <main className="relative">
-          <Hero />
-          <NewsGrid />
-          <GameShowcase />
-          <DownloadCenter />
-          <SupportForm />
-        </main>
-        <Footer />
-      </div>
+    <div className="min-h-screen bg-[#050505] selection:bg-gold/30 selection:text-gold overflow-x-hidden">
+      <Header />
+      <main>
+        <Hero />
+        <NewsGrid />
+        <GameShowcase />
+        <DownloadCenter />
+        <SupportForm />
+      </main>
+      <Footer />
     </div>
   );
 }

@@ -48,10 +48,8 @@ const MaintenanceScreen = () => {
 function AppContent() {
   const { currentPage, settings, user, isAdmin, isLoading, navigateTo } = useSettings();
 
-  // توجيه تلقائي ذكي
   useEffect(() => {
     if (!isLoading && user) {
-      // إذا كنا في صفحة اللوجين ومسجل دخول، وجهنا للمكان المناسب
       if (currentPage === 'login') {
         navigateTo(user.role === 'admin' ? 'admin' : 'site');
       }
@@ -60,7 +58,6 @@ function AppContent() {
 
   if (isLoading) return <LoadingScreen />;
 
-  // الأولوية 1: صفحة الإدارة (للمسجلين فقط)
   if (currentPage === 'admin' && user) {
     return (
       <Suspense fallback={<LoadingScreen />}>
@@ -69,7 +66,6 @@ function AppContent() {
     );
   }
 
-  // الأولوية 2: صفحة الدخول (لغير المسجلين أو من يطلبها صراحة)
   if (currentPage === 'login') {
     return (
       <Suspense fallback={<LoadingScreen />}>
@@ -78,23 +74,31 @@ function AppContent() {
     );
   }
 
-  // الأولوية 3: وضع الصيانة (للمستخدمين العاديين فقط)
   if (settings.isMaintenanceMode && !isAdmin) {
     return <MaintenanceScreen />;
   }
 
-  // الافتراضي: الموقع الرئيسي
   return (
-    <div className="min-h-screen bg-[#050505] selection:bg-gold/30 selection:text-gold overflow-x-hidden">
-      <Header />
-      <main className="relative">
-        <Hero />
-        <NewsGrid />
-        <GameShowcase />
-        <DownloadCenter />
-        <SupportForm />
-      </main>
-      <Footer />
+    <div className="min-h-screen bg-[#050505] selection:bg-gold/30 selection:text-gold overflow-x-hidden relative">
+      {/* خلفية الموقع الشاملة */}
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-center pointer-events-none transition-opacity duration-1000"
+        style={{ backgroundImage: `url('${settings.heroBgUrl}')` }}
+      >
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-[2px]"></div>
+      </div>
+
+      <div className="relative z-10">
+        <Header />
+        <main className="relative">
+          <Hero />
+          <NewsGrid />
+          <GameShowcase />
+          <DownloadCenter />
+          <SupportForm />
+        </main>
+        <Footer />
+      </div>
     </div>
   );
 }

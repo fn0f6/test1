@@ -1,36 +1,18 @@
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useSettings } from '../context/SettingsContext';
 import { Calendar, ArrowUpRight, Clock } from 'lucide-react';
 
 const NewsGrid: React.FC = () => {
   const { news, isLoading, t, lang } = useSettings();
-  const newsGridRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('active');
-          // Once revealed, we don't need to observe it anymore
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.05, rootMargin: '50px' });
-
-    const revealElements = newsGridRef.current?.querySelectorAll('.reveal-on-scroll');
-    revealElements?.forEach(el => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [news, isLoading]);
 
   return (
-    <section id="news" ref={newsGridRef} className="py-32 bg-[#050505] relative overflow-hidden">
+    <section id="news" className="py-32 bg-[#050505] relative overflow-hidden">
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gold/5 rounded-full blur-[120px] -z-0 translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] -z-0 -translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
 
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10">
-        <div className="flex flex-col md:flex-row justify-between items-end mb-24 gap-8 reveal-on-scroll">
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 relative z-10 reveal-on-scroll">
+        <div className="flex flex-col md:flex-row justify-between items-end mb-24 gap-8">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/10 border border-gold/20 text-gold text-[10px] font-black uppercase tracking-[0.3em]">
               Latest Broadcasts
@@ -65,8 +47,7 @@ const NewsGrid: React.FC = () => {
             news.map((item, idx) => (
               <article 
                 key={item.id} 
-                className="reveal-on-scroll group relative bg-[#0a0a0a] rounded-[3rem] overflow-hidden border border-white/5 hover:border-gold/40 transition-all duration-700 hover:-translate-y-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] will-change-transform"
-                style={{ transitionDelay: `${idx * 100}ms` }}
+                className="group relative bg-[#0a0a0a] rounded-[3rem] overflow-hidden border border-white/5 hover:border-gold/40 transition-all duration-700 hover:-translate-y-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] will-change-transform"
               >
                 <div className="relative h-72 overflow-hidden">
                   <img 

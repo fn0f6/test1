@@ -18,17 +18,18 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
-  // تحويل فوري بمجرد توفر الـ user
+  // تحويل فوري بمجرد توفر الـ user في الـ Context
   useEffect(() => {
     if (user && isMounted.current) {
       const destination = user.role === 'admin' ? 'admin' : 'site';
-      setSuccessMsg("مرحباً بك.. جاري فتح البوابة");
+      setSuccessMsg("تم التعرف على القبطان.. جاري فتح البوابة");
+      
       const timer = setTimeout(() => {
         if (isMounted.current) {
           setIsLoading(false);
           navigateTo(destination);
         }
-      }, 500);
+      }, 800);
       return () => clearTimeout(timer);
     }
   }, [user, navigateTo, setIsLoading]);
@@ -37,33 +38,46 @@ const AuthPage: React.FC = () => {
     e.preventDefault();
     if (localLoading) return;
 
+    // تنظيف الحالات السابقة
     setLocalLoading(true);
     setError(null);
     setSuccessMsg(null);
     
     try {
+      // تنفيذ المحاولة
       const action = isLoginMode ? login(email, password) : signup(email, password);
       const { data, error: apiErr } = await action;
       
       if (apiErr) {
         if (isMounted.current) {
-          setError(apiErr.message === "Invalid login credentials" ? "بيانات الدخول غير صحيحة" : apiErr.message);
+          let msg = apiErr.message;
+          if (msg.includes("Invalid login credentials")) msg = "بيانات الدخول غير صحيحة (تأكد من الإيميل وكلمة المرور)";
+          if (msg.includes("Email not confirmed")) msg = "يرجى تأكيد بريدك الإلكتروني أولاً";
+          setError(msg);
           setLocalLoading(false);
         }
-      } else if (data?.user || data?.session) {
+        return;
+      }
+
+      // إذا وصلنا هنا، يعني العملية نجحت في Supabase
+      if (data?.user || data?.session) {
         if (isMounted.current) {
-          setSuccessMsg(isLoginMode ? "تم التحقق من هويتك.." : "تم توقيع عقدك بنجاح..");
-          // استدعاء تحديث البيانات يدوياً لضمان السرعة
+          setSuccessMsg(isLoginMode ? "نجحت الشفرة.. جاري الإبحار" : "تم توقيع العقد! تحقق من بريدك لتفعيل الحساب.");
+          
+          // محاولة تحديث الملف الشخصي فوراً
           await refreshUserProfile();
+          
+          // إيقاف الـ spinner المحلي للسماح للـ useEffect بالتحويل
+          setLocalLoading(false);
         }
       } else if (!isLoginMode) {
-        // حالة التسجيل مع تفعيل تأكيد الإيميل
-        setSuccessMsg("يرجى تفعيل حسابك من البريد الإلكتروني للمتابعة.");
+        // حالة التسجيل (Signup) في حال تطلب تأكيد إيميل ولم يرجع session
+        setSuccessMsg("تم إرسال رسالة تفعيل لبريدك الإلكتروني.");
         setLocalLoading(false);
       }
     } catch (err: any) {
       if (isMounted.current) {
-        setError("فشل الاتصال بالأسطول. حاول لاحقاً.");
+        setError("فشل الاتصال ببرج المراقبة. تأكد من الإنترنت.");
         setLocalLoading(false);
       }
     }
@@ -71,9 +85,10 @@ const AuthPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050301] flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Background Decor */}
       <div className="absolute inset-0 bg-wood-pattern opacity-5 pointer-events-none"></div>
-      <div className="absolute -top-24 -left-24 w-96 h-96 bg-gold/5 rounded-full blur-[120px]"></div>
-      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-gold/5 rounded-full blur-[120px]"></div>
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-gold/10 rounded-full blur-[120px]"></div>
+      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-gold/10 rounded-full blur-[120px]"></div>
 
       <div className="w-full max-w-md animate-fade-in-up">
         <button 
@@ -85,6 +100,7 @@ const AuthPage: React.FC = () => {
         </button>
 
         <div className="bg-wood-950/40 backdrop-blur-3xl border border-white/5 p-10 md:p-12 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] relative">
+          {/* Badge icon */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-gold rounded-3xl rotate-12 flex items-center justify-center shadow-2xl">
             <Skull className="text-wood-900 -rotate-12" size={36} />
           </div>
@@ -94,7 +110,7 @@ const AuthPage: React.FC = () => {
               {isLoginMode ? 'دخول المقر' : 'توقيع العقد'}
             </h2>
             <p className="text-wood-500 text-sm font-medium">
-              {isLoginMode ? 'أدخل شيفرة الدخول السرية' : 'انضم لأسطول الهامور وابدأ جنيك للثروات'}
+              {isLoginMode ? 'أدخل شيفرة الدخول السرية' : 'انضم لأسطول الهامور الآن'}
             </p>
           </div>
 
@@ -130,6 +146,7 @@ const AuthPage: React.FC = () => {
                   required
                 />
               </div>
+              {email.includes('gmiail') && <p className="text-amber-500 text-[9px] font-bold mt-1">تنبيه: يبدو أنك كتبت "gmiail" بدلاً من "gmail"</p>}
             </div>
 
             <div className="space-y-2">
@@ -157,11 +174,9 @@ const AuthPage: React.FC = () => {
             )}
 
             {successMsg && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-2xl text-center flex flex-col items-center justify-center gap-3 animate-fade-in">
-                <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500">
-                  <CheckCircle2 size={24} className="animate-pulse" />
-                </div>
-                <p className="text-emerald-400 text-[11px] font-black uppercase tracking-widest text-center leading-relaxed">{successMsg}</p>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl text-center flex items-center justify-center gap-3 animate-fade-in">
+                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest">{successMsg}</p>
               </div>
             )}
 
@@ -170,7 +185,7 @@ const AuthPage: React.FC = () => {
               disabled={localLoading}
               className="w-full bg-gold text-wood-900 font-black h-14 rounded-2xl uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(255,215,0,0.2)] hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 mt-4 disabled:grayscale disabled:opacity-50"
             >
-              {localLoading ? <Loader2 className="animate-spin" size={20} /> : (isLoginMode ? <><LogIn size={18} /> دخول</> : <><UserPlus size={18} /> تسجيل الحساب</>)}
+              {localLoading ? <Loader2 className="animate-spin" size={20} /> : (isLoginMode ? <><LogIn size={18} /> دخول</> : <><UserPlus size={18} /> تسجيل</>)}
             </button>
           </form>
         </div>

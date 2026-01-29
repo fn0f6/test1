@@ -24,7 +24,7 @@ export interface SiteSettings {
 
 const DEFAULT_SETTINGS: SiteSettings = {
   logoUrl: 'assets/logo.svg',
-  heroBgUrl: 'https://images.unsplash.com/photo-1519114056088-b877fe073a5e?auto=format&fit=crop&q=80&w=1600',
+  heroBgUrl: 'assets/hero-bg.png', // سيتم استخدام الصورة المرفوعة هنا
   siteBgColor: '#050505',
   siteTitle: 'Asr Al-Hamour',
   androidUrl: '#',
@@ -94,7 +94,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return null;
       }
 
-      // 1. استخراج بيانات أساسية فورية من الجلسة
       const quickUser: UserProfile = {
         id: session.user.id,
         email: session.user.email || '',
@@ -102,10 +101,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         display_name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0]
       };
 
-      // 2. تحديث الحالة فوراً بالبيانات السريعة لفتح الموقع
       setUser(quickUser);
 
-      // 3. محاولة جلب البيانات الإضافية من الـ profiles في الخلفية
       try {
         const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         if (data) {
@@ -113,9 +110,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setUser(fullUser);
           return fullUser;
         }
-      } catch (e) {
-        // إذا فشل جلب الـ profile لا مشكلة، لدينا الـ quickUser
-      }
+      } catch (e) {}
 
       return quickUser;
     } catch (e) {

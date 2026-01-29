@@ -23,25 +23,36 @@ const NewsGrid: React.FC = () => {
             ))
           ) : (
             news.map((item) => (
-              <article key={item.id} className="group bg-white/5 rounded-[2.5rem] overflow-hidden border border-white/5 hover:border-gold/30 transition-all hover:-translate-y-2">
-                <div className="relative h-60 overflow-hidden">
-                  <img src={item.thumbnailUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                  <div className="absolute top-4 left-4 px-4 py-1.5 rounded-xl glass-card text-[10px] font-black text-white uppercase tracking-widest">
+              <article key={item.id} className="group bg-white/5 rounded-[2.5rem] overflow-hidden border border-white/5 hover:border-gold/30 transition-all hover:-translate-y-2 flex flex-col h-full">
+                <div className="relative h-60 overflow-hidden shrink-0">
+                  <img 
+                    src={item.thumbnailUrl || 'https://placehold.co/800x600/111111/ffd700?text=ASR+ALHAMOUR'} 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://placehold.co/800x600/111111/ffd700?text=ASR+ALHAMOUR';
+                    }}
+                  />
+                  <div className="absolute top-4 left-4 px-4 py-1.5 rounded-xl glass-card text-[10px] font-black text-white uppercase tracking-widest border border-white/10">
                     {item.category}
                   </div>
                 </div>
-                <div className="p-8 space-y-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                <div className="p-8 space-y-4 flex flex-col flex-1" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
                   <div className="flex items-center gap-2 text-[10px] font-black text-gold/60 uppercase">
                     <Calendar size={14} /> {item.date}
                   </div>
-                  <h3 className="text-2xl font-display font-black text-white group-hover:text-gold transition-colors">{item.title}</h3>
-                  <p className="text-slate-400 text-sm line-clamp-2">{item.excerpt}</p>
+                  <h3 className="text-2xl font-display font-black text-white group-hover:text-gold transition-colors leading-tight line-clamp-2">{item.title}</h3>
+                  <p className="text-slate-400 text-sm line-clamp-3 leading-relaxed flex-1">{item.excerpt}</p>
                   <button className="pt-4 flex items-center gap-2 text-white font-black text-[10px] uppercase tracking-widest group-hover:gap-4 transition-all">
-                    Read More <ArrowUpRight size={14} className="text-gold" />
+                    {lang === 'en' ? 'Read More' : 'اقرأ المزيد'} <ArrowUpRight size={14} className="text-gold" />
                   </button>
                 </div>
               </article>
             ))
+          )}
+          {!isLoading && news.length === 0 && (
+            <div className="col-span-full py-20 text-center opacity-20">
+               <p className="text-3xl font-black uppercase tracking-widest">لا توجد أخبار حالياً</p>
+            </div>
           )}
         </div>
       </div>

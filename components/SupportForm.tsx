@@ -26,15 +26,15 @@ const SupportForm: React.FC = () => {
     <section id="support" className="py-32 bg-[#050505] relative overflow-hidden scroll-mt-20">
       <div className="absolute inset-0 bg-gold/5 blur-[150px] -z-0 opacity-30"></div>
       
-      <div className="max-w-4xl mx-auto px-6 relative z-10">
-        <div className="text-center mb-16 reveal-on-scroll">
+      <div className="max-w-4xl mx-auto px-6 relative z-10 reveal-on-scroll">
+        <div className="text-center mb-16">
           <h2 className="text-4xl lg:text-6xl font-display font-black text-white mb-6 uppercase tracking-tighter">{t.supportTitle}</h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">{t.supportSub}</p>
         </div>
 
         <div className="glass-card rounded-[3rem] p-10 md:p-16 border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.6)]">
           {status === LoadingState.SUCCESS ? (
-            <div className="text-center py-12 animate-fade-in-up">
+            <div className="text-center py-12">
               <div className="w-24 h-24 bg-gold/10 border-2 border-gold rounded-full flex items-center justify-center mx-auto mb-8">
                 <CheckCircle size={48} className="text-gold" />
               </div>

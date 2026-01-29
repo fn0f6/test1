@@ -18,13 +18,16 @@ const AuthPage: React.FC = () => {
     return () => { isMounted.current = false; };
   }, []);
 
-  // تحويل إضافي في حال تغير حالة المستخدم في الـ Context
+  // تحويل إجباري بمجرد توفر المستخدم
   useEffect(() => {
-    if (user && !localLoading && isMounted.current) {
-      const destination = user.role === 'admin' ? 'admin' : 'site';
-      navigateTo(destination);
+    if (user && isMounted.current) {
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+        navigateTo(user.role === 'admin' ? 'admin' : 'site');
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  }, [user, localLoading, navigateTo]);
+  }, [user, navigateTo, setIsLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,44 +38,32 @@ const AuthPage: React.FC = () => {
     setSuccessMsg(null);
     
     try {
-      const action = isLoginMode ? login(email, password) : signup(email, password);
+      const action = isLoginMode ? login(email.trim(), password) : signup(email.trim(), password);
       const { data, error: apiErr } = await action;
       
       if (apiErr) {
         if (isMounted.current) {
           let msg = apiErr.message;
           if (msg.includes("Invalid login credentials")) msg = "بيانات الدخول غير صحيحة";
-          if (msg.includes("Email not confirmed")) msg = "يرجى تأكيد البريد الإلكتروني أولاً";
-          if (msg.includes("rate limit")) msg = "محاولات كثيرة جداً، انتظر قليلاً";
+          if (msg.includes("Email not confirmed")) msg = "يرجى تأكيد بريدك الإلكتروني أولاً";
           setError(msg);
           setLocalLoading(false);
         }
         return;
       }
 
-      // في حال تسجيل دخول ناجح
       if (data?.session) {
-        setSuccessMsg("تمت المصادقة بنجاح.. جاري الدخول");
-        
-        // جلب الملف الشخصي والتحويل فوراً
-        const profile = await refreshUserProfile();
-        if (isMounted.current) {
-          setLocalLoading(false);
-          setIsLoading(false);
-          navigateTo(profile?.role === 'admin' ? 'admin' : 'site');
-        }
+        setSuccessMsg("تم تسجيل الدخول بنجاح! جاري التوجيه...");
+        // تحديث البيانات في الـ Context
+        await refreshUserProfile();
+        // التحويل سيتم عبر الـ useEffect بمجرد تحديث الـ user
       } else if (!isLoginMode) {
-        // حالة تسجيل جديد (Signup) ناجح
-        setSuccessMsg("تم إرسال رابط التفعيل لبريدك الإلكتروني.");
-        setLocalLoading(false);
-      } else {
-        // في حال نجحت العملية لكن لا توجد جلسة (نادر الحدوث)
-        setError("فشل الحصول على جلسة دخول. حاول مرة أخرى.");
+        setSuccessMsg("تم التسجيل! تحقق من بريدك الإلكتروني لتفعيل الحساب.");
         setLocalLoading(false);
       }
     } catch (err: any) {
       if (isMounted.current) {
-        setError("فشل الاتصال بالخادم الرئيسي.");
+        setError("فشل الاتصال بالخادم.");
         setLocalLoading(false);
       }
     }
@@ -139,7 +130,6 @@ const AuthPage: React.FC = () => {
                   required
                 />
               </div>
-              {email.includes('gmiail') && <p className="text-amber-500 text-[9px] font-bold mt-1">تنبيه: يبدو أنك كتبت "gmiail" بدلاً من "gmail"</p>}
             </div>
 
             <div className="space-y-2">

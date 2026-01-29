@@ -60,7 +60,7 @@ const apiService = {
         id: item.id,
         title: item.title,
         excerpt: item.excerpt,
-        thumbnailUrl: item.thumbnail_url || 'https://placehold.co/800x600/111111/ffd700?text=FLEET+LOG',
+        thumbnailUrl: item.thumbnail_url || 'https://placehold.co/800x600/111111/ffd700?text=FLEET+NEWS',
         category: item.category,
         date: item.date
       })) as NewsItem[];
@@ -72,7 +72,7 @@ const apiService = {
     const { error } = await supabase.from('news').insert([{
       title: news.title,
       excerpt: news.excerpt,
-      thumbnail_url: news.thumbnailUrl || '', // جعلها فارغة إذا لم تتوفر
+      thumbnail_url: news.thumbnailUrl || '', // جعل الحقل اختيارياً
       category: news.category,
       date: new Date().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })
     }]);

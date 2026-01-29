@@ -17,7 +17,7 @@ const apiService = {
         androidUrl: data.android_url,
         iosUrl: data.ios_url,
         isMaintenanceMode: !!data.is_maintenance_mode,
-        maintenance_message: data.maintenance_message,
+        maintenanceMessage: data.maintenance_message,
         qrData: data.qr_data,
         customQrUrl: data.custom_qr_url,
         showcaseImages: data.showcase_images || {},
@@ -89,12 +89,24 @@ const apiService = {
     try {
       const { data, error } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
       if (error) return [];
-      return (data || []) as SupportTicket[];
+      return (data || []).map(t => ({
+        id: t.id,
+        name: t.name,
+        email: t.email,
+        subject: t.subject,
+        message: t.message,
+        createdAt: t.created_at
+      })) as SupportTicket[];
     } catch { return []; }
   },
 
   submitTicket: async (ticket: any) => {
-    const { error } = await supabase.from('tickets').insert([ticket]);
+    const { error } = await supabase.from('tickets').insert([{
+      name: ticket.name,
+      email: ticket.email,
+      subject: ticket.subject,
+      message: ticket.message
+    }]);
     if (error) throw error;
   },
 
@@ -105,12 +117,14 @@ const apiService = {
   getAllProfiles: async () => {
     if (!isSupabaseConfigured) return [];
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
     return data || [];
   },
 
   updateUserRole: async (id: string, role: string) => {
     if (!isSupabaseConfigured) return;
-    await supabase.from('profiles').update({ role }).eq('id', id);
+    const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+    if (error) throw error;
   },
 
   updateProfile: async (id: string, updates: any) => {
@@ -122,18 +136,29 @@ const apiService = {
 
   uploadImage: async (file: File, bucket: string = 'assets') => {
     if (!isSupabaseConfigured) return '';
+    
+    // تنظيف اسم الملف من الحروف الخاصة
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const cleanFileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${cleanFileName}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
     
-    const { error } = await supabase.storage.from(bucket).upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
+    if (error) {
+      console.error("Storage Upload Error:", error);
+      throw error;
+    }
     
-    if (error) throw error;
-    
-    const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
-    return data.publicUrl;
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+      
+    return publicUrl;
   }
 };
 

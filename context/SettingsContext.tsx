@@ -58,6 +58,7 @@ interface SettingsContextType {
   getAllUsers: () => Promise<UserProfile[]>;
   updateUserRole: (id: string, role: string) => Promise<void>;
   updateUserProfile: (u: any) => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -72,35 +73,67 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [news, setNews] = useState<NewsItem[]>([]);
 
   const refreshData = async () => {
-    const [s, n, t] = await Promise.all([apiService.getSettings(), apiService.getNews(), apiService.getTickets()]);
-    if (s) setSettings(s);
-    setNews(n);
-    setTickets(t);
+    try {
+      const [s, n, t] = await Promise.all([
+        apiService.getSettings().catch(() => null),
+        apiService.getNews().catch(() => []),
+        apiService.getTickets().catch(() => [])
+      ]);
+      if (s) setSettings(s);
+      setNews(n);
+      setTickets(t);
+    } catch (e) {
+      console.error("Data refresh failed", e);
+    }
+  };
+
+  const refreshUserProfile = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        if (!error && data) {
+          setUser(data);
+        }
+      } else {
+        setUser(null);
+      }
+    } catch (e) {
+      console.error("Profile refresh error", e);
+    }
   };
 
   useEffect(() => {
     const init = async () => {
-      if (isSupabaseConfigured) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-            setUser(data);
-          }
-        } catch (e) { console.error("Auth init error", e); }
+      // مؤقت أمان: إذا استغرق التحميل أكثر من 5 ثوانٍ، اجبر الموقع على البدء
+      const safetyTimeout = setTimeout(() => {
+        setIsLoading(false);
+      }, 5000);
+
+      try {
+        await refreshUserProfile();
+        await refreshData();
+      } catch (e) {
+        console.error("Initialization error", e);
+      } finally {
+        clearTimeout(safetyTimeout);
+        setIsLoading(false);
       }
-      await refreshData();
-      setIsLoading(false);
     };
     init();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        setUser(data);
-      } else if (event === 'SIGNED_OUT') {
+      if (session?.user) {
+        await refreshUserProfile();
+        if (event === 'SIGNED_IN') {
+          // التحويل سيتم في AppContent
+        }
+      } else {
         setUser(null);
-        setCurrentPage('site');
+        if (event === 'SIGNED_OUT') {
+          setCurrentPage('site');
+        }
       }
     });
 
@@ -112,6 +145,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     user, isAdmin: user?.role === 'admin',
     t: settings?.translations?.[lang] || DEFAULT_SETTINGS.translations[lang],
     navigateTo: setCurrentPage,
+    refreshUserProfile,
     login: (email: string, pass: string) => supabase.auth.signInWithPassword({ email, password: pass }),
     signup: (email: string, pass: string) => supabase.auth.signUp({ email, password: pass }),
     logout: () => supabase.auth.signOut(),

@@ -51,7 +51,7 @@ interface SettingsContextType {
   tickets: SupportTicket[]; news: NewsItem[];
   addTicket: (tk: any) => Promise<void>; deleteTicket: (id: number) => Promise<void>;
   addNews: (nw: any) => Promise<void>; deleteNews: (id: string) => Promise<void>;
-  isLoading: boolean; currentPage: string; navigateTo: (p: any) => void;
+  isLoading: boolean; setIsLoading: (v: boolean) => void; currentPage: string; navigateTo: (p: any) => void;
   user: UserProfile | null; isAdmin: boolean; lang: Language; setLang: (l: Language) => void; t: any;
   login: (e: string, p: string) => Promise<any>; logout: () => Promise<void>;
   signup: (e: string, p: string) => Promise<any>;
@@ -95,6 +95,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         if (!error && data) {
           setUser(data);
+        } else {
+          // حالة طوارئ: إذا لم يجد الملف الشخصي بعد، استخدم بيانات الجلسة الأساسية مؤقتاً
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: session.user.email === 'aaatay3@gmail.com' ? 'admin' : 'user',
+            display_name: session.user.user_metadata?.display_name || session.user.email?.split('@')[0]
+          });
         }
       } else {
         setUser(null);
@@ -106,16 +114,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     const init = async () => {
-      // مؤقت أمان: إذا استغرق التحميل أكثر من 5 ثوانٍ، اجبر الموقع على البدء
-      const safetyTimeout = setTimeout(() => {
-        setIsLoading(false);
-      }, 5000);
-
+      const safetyTimeout = setTimeout(() => setIsLoading(false), 5000);
       try {
         await refreshUserProfile();
         await refreshData();
-      } catch (e) {
-        console.error("Initialization error", e);
       } finally {
         clearTimeout(safetyTimeout);
         setIsLoading(false);
@@ -126,13 +128,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         await refreshUserProfile();
-        if (event === 'SIGNED_IN') {
-          // التحويل سيتم في AppContent
-        }
+        if (event === 'SIGNED_IN') setIsLoading(false);
       } else {
         setUser(null);
         if (event === 'SIGNED_OUT') {
           setCurrentPage('site');
+          setIsLoading(false);
         }
       }
     });
@@ -141,7 +142,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const value = {
-    settings, tickets, news, isLoading, currentPage, lang, setLang,
+    settings, tickets, news, isLoading, setIsLoading, currentPage, lang, setLang,
     user, isAdmin: user?.role === 'admin',
     t: settings?.translations?.[lang] || DEFAULT_SETTINGS.translations[lang],
     navigateTo: setCurrentPage,
